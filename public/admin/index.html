@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - RADAR 17 Debate</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <style>
+        .question-item {
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        .question-item:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .active-question {
+            background-color: #d1e7dd;
+            border-color: #badbcc;
+            box-shadow: 0 0 8px rgba(25, 135, 84, 0.4);
+        }
+        .finalized-question {
+            background-color: #f8d7da;
+            border-color: #f5c2c7;
+        }
+        #current-scores {
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .vs-badge {
+            background-color: #f8f9fa;
+            color: #212529;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin: 0 20px;
+            font-size: 1.5rem;
+        }
+        .team-a {
+            color: #0d6efd;
+        }
+        .team-b {
+            color: #dc3545;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #198754;
+        }
+        .cursor-pointer {
+            cursor: pointer;
+        }
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .question-number {
+            background-color: #6c757d;
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-broadcast"></i> RADAR 17 - Painel Administrativo
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/" target="_blank">
+                            <i class="bi bi-display"></i> Ver Página de Votação
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/visualizer" target="_blank">
+                            <i class="bi bi-graph-up"></i> Ver Visualização Pública
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <ul class="nav nav-pills mb-4" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home-tab-pane" type="button" role="tab">
+                    <i class="bi bi-house-door"></i> Principal
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="questions-tab" data-bs-toggle="tab" data-bs-target="#questions-tab-pane" type="button" role="tab">
+                    <i class="bi bi-question-circle"></i> Gestão de Questões
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings-tab-pane" type="button" role="tab">
+                    <i class="bi bi-gear"></i> Configurações
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="myTabContent">
+            <!-- Tab Principal -->
+            <div class="tab-pane fade show active" id="home-tab-pane" role="tabpanel" tabindex="0">
+                <div class="row">
+                    <div class="col-lg-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header bg-primary text-white">
+                                <h3 class="mb-0"><i class="bi bi-trophy"></i> Pontuação Atual</h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="current-scores">
+                                    <span class="team-a">Equipa A: <span class="score">0</span></span>
+                                    <span class="vs-badge">VS</span>
+                                    <span class="team-b">Equipa B: <span class="score">0</span></span>
+                                </div>
+                                <div class="text-center mt-4">
+                                    <button id="reset-scores-btn" class="btn btn-warning">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Resetar Pontuações
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-header bg-success text-white">
+                                <h3 class="mb-0"><i class="bi bi-chat-left-text"></i> Questão Ativa</h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="active-question-container" class="p-3 mb-3 bg-light rounded">
+                                    <h4 class="mb-3">Questão Atual:</h4>
+                                    <div id="active-question-text" class="alert alert-secondary fs-5">
+                                        Nenhuma questão ativa
+                                    </div>
+                                    <div class="mt-4 d-flex justify-content-between" id="active-question-controls">
+                                        <button id="start-voting-btn" class="btn btn-success" disabled>
+                                            <i class="bi bi-play-fill"></i> Iniciar Votação
+                                        </button>
+                                        <button id="end-voting-btn" class="btn btn-danger" disabled>
+                                            <i class="bi bi-stop-fill"></i> Encerrar Votação
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="voting-status" class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i> Selecione uma questão para ativar.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                                <h3 class="mb-0"><i class="bi bi-list-check"></i> Próximas Questões</h3>
+                                <button class="btn btn-light btn-sm" id="refresh-preview-btn">
+                                    <i class="bi bi-arrow-clockwise"></i> Atualizar
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div id="questions-preview" class="row">
+                                    <!-- Serão preenchidas via JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Gestão de Questões -->
+            <div class="tab-pane fade" id="questions-tab-pane" role="tabpanel" tabindex="0">
+                <div class="row">
+                    <div class="col-md-12 mb-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h3 class="mb-0"><i class="bi bi-question-circle"></i> Questões do Debate</h3>
+                                <div>
+                                    <button class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#addQuestionModal">
+                                        <i class="bi bi-plus-circle"></i> Adicionar Questão
+                                    </button>
+                                    <button class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">
+                                        <i class="bi bi-upload"></i> Carregar em Massa
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="questions-list" class="overflow-auto" style="max-height: 600px;">
+                                    <!-- Lista de questões será carregada aqui -->
+                                    <div class="text-center py-5">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Carregando...</span>
+                                        </div>
+                                        <p class="mt-2">Carregando questões...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Configurações -->
+            <div class="tab-pane fade" id="settings-tab-pane" role="tabpanel" tabindex="0">
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header bg-dark text-white">
+                                <h3 class="mb-0"><i class="bi bi-gear"></i> Configurações do Debate</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="debate-settings-form">
+                                    <div class="mb-3">
+                                        <label for="teamA-name" class="form-label">Nome da Equipa A</label>
+                                        <input type="text" class="form-control" id="teamA-name" value="Equipa A">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="teamB-name" class="form-label">Nome da Equipa B</label>
+                                        <input type="text" class="form-control" id="teamB-name" value="Equipa B">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="debate-title" class="form-label">Título do Debate</label>
+                                        <input type="text" class="form-control" id="debate-title" value="RADAR 17 - Debate Participativo">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="debate-subtitle" class="form-label">Subtítulo</label>
+                                        <input type="text" class="form-control" id="debate-subtitle" value="Jovens e Decisores Políticos">
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Guardar Configurações</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header bg-dark text-white">
+                                <h3 class="mb-0"><i class="bi bi-tools"></i> Ferramentas</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-grid gap-3">
+                                    <button id="export-json-btn" class="btn btn-outline-primary">
+                                        <i class="bi bi-download"></i> Exportar Questões (JSON)
+                                    </button>
+                                    <button id="export-csv-btn" class="btn btn-outline-primary">
+                                        <i class="bi bi-filetype-csv"></i> Exportar Resultados (CSV)
+                                    </button>
+                                    <button id="clear-all-btn" class="btn btn-outline-danger">
+                                        <i class="bi bi-trash"></i> Limpar Todos os Dados
+                                    </button>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="alert alert-warning mt-4">
+                                    <h5><i class="bi bi-exclamation-triangle"></i> Zona de Perigo</h5>
+                                    <p>As ações abaixo não podem ser desfeitas.</p>
+                                </div>
+                                
+                                <div class="d-grid">
+                                    <button id="reset-database-btn" class="btn btn-danger">
+                                        <i class="bi bi-database-x"></i> Resetar Base de Dados
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para adicionar questão -->
+    <div class="modal fade" id="addQuestionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Adicionar Nova Questão</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-question-form">
+                        <div class="mb-3">
+                            <label for="question-text" class="form-label">Texto da Questão</label>
+                            <textarea class="form-control" id="question-text" rows="3" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="question-order" class="form-label">Ordem</label>
+                            <input type="number" class="form-control" id="question-order" min="1" required>
+                            <div class="form-text">Posição da questão na sequência do debate</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="save-question-btn">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para editar questão -->
+    <div class="modal fade" id="editQuestionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title"><i class="bi bi-pencil-square"></i> Editar Questão</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-question-form">
+                        <input type="hidden" id="edit-question-id">
+                        <div class="mb-3">
+                            <label for="edit-question-text" class="form-label">Texto da Questão</label>
+                            <textarea class="form-control" id="edit-question-text" rows="3" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-question-order" class="form-label">Ordem</label>
+                            <input type="number" class="form-control" id="edit-question-order" min="1" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" id="update-question-btn">Atualizar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para carregamento em massa -->
+    <div class="modal fade" id="bulkUploadModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title"><i class="bi bi-upload"></i> Carregar Múltiplas Questões</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="bulk-upload-form">
+                        <div class="mb-3">
+                            <label for="bulk-questions" class="form-label">Questões (uma por linha)</label>
+                            <textarea class="form-control" id="bulk-questions" rows="10" required 
+                                placeholder="Como podemos melhorar o transporte público na cidade?
+Quais são as maiores barreiras ao acesso à habitação para jovens?
+Como aumentar a participação juvenil nas decisões políticas?"></textarea>
+                            <div class="form-text">Cada linha representa uma questão. As questões serão numeradas automaticamente, começando da ordem mais alta existente.</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="upload-bulk-btn">Carregar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de confirmação -->
+    <div class="modal fade" id="confirmationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle"></i> Confirmação</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmation-message">Tem certeza que deseja realizar esta ação?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger" id="confirm-action-btn">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-dark text-white mt-5 py-3">
+        <div class="container text-center">
+            <p class="mb-0">RADAR 17 - Sistema de Debate Participativo © 2025</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
