@@ -15,8 +15,7 @@ const server = http.createServer(app);
 const socketService = require('./services/socketService');
 socketService.init(server);
 
-// Conectar ao banco de dados
-require('./config/db')();
+require('./generated/prisma');
 
 // Middlewares
 app.use(cors());
@@ -34,7 +33,7 @@ app.use('/api/admin', require('./routes/admin'));
 // Iniciar servidor
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Servidor a rodar na porta ${PORT}`);
 });
 
 module.exports = { app, server };

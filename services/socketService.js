@@ -1,10 +1,11 @@
-const socketIo = require('socket.io');
+const { Server } = require('socket.io');
+const prisma = require('./prismaService');
 const stateService = require('./stateService');
 
 let io;
 
 function init(server) {
-  io = socketIo(server, {
+  io = new Server(server, {
     cors: {
       origin: '*',
       methods: ['GET', 'POST']
@@ -12,89 +13,94 @@ function init(server) {
   });
 
   io.on('connection', (socket) => {
-    console.log('Novo cliente conectado:', socket.id);
+    console.log('Cliente conectado:', socket.id);
     
-    // Enviar estado atual para o cliente
-    const currentState = stateService.getCurrentState();
-    socket.emit('currentState', currentState);
+    // Send current state to new client
+    socket.emit('currentState', stateService.getCurrentState());
     
-    // Enviar também os nomes das equipes atuais
-    socket.emit('teamNamesUpdated', {
-      teamAName: currentState.teamAName,
-      teamBName: currentState.teamBName
-    });
-    
-    // Listener para atualização direta dos nomes
-    socket.on('updateTeamNames', (data) => {
-      console.log('Recebendo atualização de nomes:', data);
-      
-      stateService.updateState({
-        teamAName: data.teamAName || "Equipa A",
-        teamBName: data.teamBName || "Equipa B"
-      });
-      
-      const updatedState = stateService.getCurrentState();
-      
-      // Notificar todos os clientes
-      io.emit('teamNamesUpdated', {
-        teamAName: updatedState.teamAName,
-        teamBName: updatedState.teamBName
-      });
-      
-      console.log('Nomes atualizados e propagados para todos os clientes');
-    });
-    
-    // Ouvir por votos dos clientes
+    // Handle vote submission
     socket.on('submitVote', async (data) => {
-      const Vote = require('../models/Vote');
-      const currentState = stateService.getCurrentState();
-      
-      if (!currentState.isVotingActive || !currentState.activeQuestion) {
-        socket.emit('error', { message: 'Votação não está ativa no momento' });
-        return;
-      }
-      
       try {
-        // Verificar se já votou nesta questão
-        const existingVote = await Vote.findOne({
-          questionId: currentState.activeQuestion._id,
-          clientId: data.clientId || socket.id
-        });
+        const { questionId, teamVoted, clientId } = data;
         
-        if (existingVote) {
-          socket.emit('error', { message: 'Você já votou nesta questão' });
+        if (!questionId || !teamVoted || !clientId) {
+          socket.emit('voteError', { error: 'Dados incompletos' });
           return;
         }
         
-        // Registrar voto no banco de dados
-        const vote = new Vote({
-          questionId: currentState.activeQuestion._id,
-          teamVoted: data.teamVoted,
-          clientId: data.clientId || socket.id
+        // Check if voting is active
+        if (!stateService.getCurrentState().isVotingActive) {
+          socket.emit('voteError', { error: 'Votação não está ativa' });
+          return;
+        }
+        
+        // Check if question is active
+        const question = await prisma.question.findUnique({
+          where: { id: questionId }
         });
         
-        await vote.save();
+        if (!question || !question.isActive) {
+          socket.emit('voteError', { error: 'Questão não está ativa' });
+          return;
+        }
         
-        socket.emit('voteConfirmed', { questionId: currentState.activeQuestion._id });
-        
+        // Try to create vote (will fail if client already voted due to unique constraint)
+        try {
+          await prisma.vote.create({
+            data: {
+              questionId,
+              teamVoted,
+              clientId
+            }
+          });
+          
+          // Confirm vote to client
+          socket.emit('voteConfirmed', { questionId, teamVoted });
+          
+          // Update vote counts in real-time
+          const teamAVotes = await prisma.vote.count({
+            where: {
+              questionId,
+              teamVoted: 'A'
+            }
+          });
+          
+          const teamBVotes = await prisma.vote.count({
+            where: {
+              questionId,
+              teamVoted: 'B'
+            }
+          });
+          
+          // Broadcast vote update to all clients
+          io.emit('voteUpdate', {
+            questionId,
+            teamA: teamAVotes,
+            teamB: teamBVotes
+          });
+        } catch (error) {
+          // Check if error is due to unique constraint
+          if (error.code === 'P2002') {
+            socket.emit('voteError', { error: 'Você já votou nesta questão' });
+          } else {
+            throw error;
+          }
+        }
       } catch (error) {
         console.error('Erro ao processar voto:', error);
-        socket.emit('error', { message: 'Erro ao processar seu voto' });
+        socket.emit('voteError', { error: 'Erro ao processar voto' });
       }
     });
     
-    // Desconexão
     socket.on('disconnect', () => {
       console.log('Cliente desconectado:', socket.id);
     });
   });
-
-  return io;
 }
 
 function getIO() {
   if (!io) {
-    throw new Error('Socket.io não foi inicializado!');
+    throw new Error('Socket.io não foi inicializado');
   }
   return io;
 }

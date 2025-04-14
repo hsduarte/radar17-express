@@ -320,4 +320,24 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Erro ao carregar configurações:', error);
         }
     }
+
+    // Update the socket event listeners in your main.js file for the voting page
+    socket.on('votingEnded', (data) => {
+        console.log('Voting ended:', data);
+        isVotingActive = false;
+        
+        // Update UI to show voting has ended
+        const statusEl = document.getElementById('voting-status');
+        if (statusEl) {
+            statusEl.className = 'bg-red-100 text-red-800 p-4 rounded-lg mb-4';
+            statusEl.innerHTML = '<i class="bi bi-x-circle-fill mr-2"></i> Votação encerrada. Aguarde a próxima questão.';
+        }
+        
+        // Disable voting buttons
+        const voteButtons = document.querySelectorAll('.vote-btn');
+        voteButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+        });
+    });
 });

@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Question {
+  id          String   @id @default(uuid())
+  text        String
+  order       Int      @unique
+  isActive    Boolean  @default(false)
+  isFinalized Boolean  @default(false)
+  teamAVotes  Int      @default(0)
+  teamBVotes  Int      @default(0)
+  createdAt   DateTime @default(now())
+  isArchived  Boolean  @default(false)
+  votes       Vote[]
+}
+
+model Session {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  teamAName   String    @default("Equipa A")
+  teamBName   String    @default("Equipa B")
+  isActive    Boolean   @default(false)
+  startTime   DateTime?
+  endTime     DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Vote {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  teamVoted  String
+  clientId   String
+  createdAt  DateTime @default(now())
+
+  @@unique([questionId, clientId])
+}

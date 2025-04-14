@@ -1,25 +1,35 @@
 const express = require('express');
 const router = express.Router();
-const Question = require('../models/Question');
+const prisma = require('../services/prismaService');
 
-// Obter todas as questões
+// Get all questions
 router.get('/', async (req, res) => {
   try {
-    const questions = await Question.find().sort({ order: 1 });
+    // Change from prisma.question to prisma.Question to match your schema
+    const questions = await prisma.Question.findMany({
+      orderBy: {
+        order: 'asc'
+      }
+    });
+    
     res.json(questions);
   } catch (error) {
     console.error('Erro ao buscar questões:', error);
-    res.status(500).json({ error: 'Erro ao buscar questões' });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Obter uma questão específica
+// Get a specific question
 router.get('/:id', async (req, res) => {
   try {
-    const question = await Question.findById(req.params.id);
+    const question = await prisma.question.findUnique({
+      where: { id: req.params.id }
+    });
+    
     if (!question) {
       return res.status(404).json({ error: 'Questão não encontrada' });
     }
+    
     res.json(question);
   } catch (error) {
     console.error('Erro ao buscar questão:', error);
@@ -27,56 +37,81 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Criar nova questão (rota admin)
+// Create a new question
 router.post('/', async (req, res) => {
   try {
-    const { text, order } = req.body;
-    
-    // Verificar se ordem já existe
-    const existingWithOrder = await Question.findOne({ order });
-    if (existingWithOrder) {
-      return res.status(400).json({ error: 'Já existe uma questão com esta ordem' });
-    }
-    
-    const newQuestion = new Question({
-      text,
-      order
+    // Get the highest order value
+    const highestOrder = await prisma.Question.findFirst({
+      orderBy: {
+        order: 'desc'
+      }
     });
     
-    const savedQuestion = await newQuestion.save();
-    res.status(201).json(savedQuestion);
+    // Create the new question
+    const newQuestion = await prisma.Question.create({
+      data: {
+        text: req.body.text,
+        order: req.body.order || (highestOrder ? highestOrder.order + 1 : 1)
+      }
+    });
+    
+    res.status(201).json(newQuestion);
   } catch (error) {
     console.error('Erro ao criar questão:', error);
-    res.status(500).json({ error: 'Erro ao criar questão' });
+    
+    // Check if it's a unique constraint violation
+    if (error.code === 'P2002' && error.meta?.target?.includes('order')) {
+      return res.status(400).json({ 
+        error: 'Já existe uma questão com esta ordem. Por favor, escolha outro valor.' 
+      });
+    }
+    
+    res.status(400).json({ error: error.message });
   }
 });
 
-// Atualizar questão (rota admin)
-router.put('/:id', async (req, res) => {
+// Create multiple questions
+router.post('/bulk', async (req, res) => {
   try {
-    const { text, order } = req.body;
+    const { questions } = req.body;
     
-    // Verificar se ordem já existe em outra questão
-    if (order) {
-      const existingWithOrder = await Question.findOne({ 
-        order, 
-        _id: { $ne: req.params.id } 
-      });
-      
-      if (existingWithOrder) {
-        return res.status(400).json({ error: 'Já existe outra questão com esta ordem' });
-      }
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ error: 'Formato inválido. Envie um array de questões.' });
     }
     
-    const updatedQuestion = await Question.findByIdAndUpdate(
-      req.params.id,
-      { $set: req.body },
-      { new: true }
+    // Get the highest order value
+    const highestOrder = await prisma.question.findFirst({
+      orderBy: { order: 'desc' }
+    });
+    
+    let nextOrder = highestOrder ? highestOrder.order + 1 : 1;
+    
+    // Create questions in transaction
+    const createdQuestions = await prisma.$transaction(
+      questions.map(questionText => {
+        return prisma.question.create({
+          data: {
+            text: questionText,
+            order: nextOrder++
+          }
+        });
+      })
     );
     
-    if (!updatedQuestion) {
-      return res.status(404).json({ error: 'Questão não encontrada' });
-    }
+    res.status(201).json(createdQuestions);
+  } catch (error) {
+    console.error('Erro ao criar questões em massa:', error);
+    res.status(500).json({ error: 'Erro ao criar questões em massa' });
+  }
+});
+
+// Update a question
+router.put('/:id', async (req, res) => {
+  try {
+    const updatedQuestion = await prisma.question.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
     
     res.json(updatedQuestion);
   } catch (error) {
@@ -85,73 +120,33 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Excluir questão (rota admin)
+// Delete a question
 router.delete('/:id', async (req, res) => {
   try {
-    const deletedQuestion = await Question.findByIdAndDelete(req.params.id);
+    const questionId = req.params.id;
     
-    if (!deletedQuestion) {
-      return res.status(404).json({ error: 'Questão não encontrada' });
-    }
+    // Delete related votes first
+    await prisma.Vote.deleteMany({
+      where: { questionId: questionId }
+    });
+    
+    // Then delete the question
+    await prisma.Question.delete({
+      where: { id: questionId }
+    });
     
     res.json({ message: 'Questão excluída com sucesso' });
   } catch (error) {
-    console.error('Erro ao excluir questão:', error);
-    res.status(500).json({ error: 'Erro ao excluir questão' });
+    // Handle the case where the record doesn't exist
+    if (error.code === 'P2025') {
+      // Record doesn't exist, but we can still return success
+      return res.status(200).json({ message: 'Question already deleted or not found' });
+    }
+    
+    // Handle other errors
+    console.error('Error deleting question:', error);
+    res.status(500).json({ error: error.message });
   }
-});
-
-// Carregar múltiplas questões de uma vez (rota admin)
-router.post('/bulk', async (req, res) => {
-  try {
-    const { questions } = req.body;
-    
-    if (!Array.isArray(questions) || questions.length === 0) {
-      return res.status(400).json({ error: 'É necessário fornecer um array de questões' });
-    }
-    
-    // Verificar se todas as questões têm ordem única
-    const orders = questions.map(q => q.order);
-    const uniqueOrders = new Set(orders);
-    
-    if (uniqueOrders.size !== questions.length) {
-      return res.status(400).json({ error: 'Todas as questões devem ter ordens únicas' });
-    }
-    
-    // Inserir questões
-    const insertedQuestions = await Question.insertMany(questions);
-    
-    res.status(201).json(insertedQuestions);
-  } catch (error) {
-    console.error('Erro ao criar questões em massa:', error);
-    res.status(500).json({ error: 'Erro ao criar questões em massa' });
-  }
-});
-
-// Add this route to your questions.js file
-router.put('/questions/:id/archive', async (req, res) => {
-    try {
-        const questionId = req.params.id;
-        
-        // Find the question
-        const question = await Question.findById(questionId);
-        
-        if (!question) {
-            return res.status(404).json({ error: 'Questão não encontrada' });
-        }
-        
-        // Set archived flag to true
-        question.isArchived = true;
-        await question.save();
-        
-        // Emit event to all clients
-        req.app.get('io').emit('questionArchived', { questionId });
-        
-        res.json({ success: true, message: 'Questão arquivada com sucesso' });
-    } catch (error) {
-        console.error('Error archiving question:', error);
-        res.status(500).json({ error: 'Erro ao arquivar questão' });
-    }
 });
 
 module.exports = router;

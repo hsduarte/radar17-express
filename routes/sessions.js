@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const Session = require('../models/Session');
+const prisma = require('../services/prismaService');
 
-// Obter todas as sessões
+// Get all sessions
 router.get('/', async (req, res) => {
   try {
-    const sessions = await Session.find().sort({ createdAt: -1 });
+    const sessions = await prisma.session.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
     res.json(sessions);
   } catch (error) {
     console.error('Erro ao buscar sessões:', error);

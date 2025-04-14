@@ -30,8 +30,20 @@ let currentState = {
     return currentState;
   }
   
+  function setActiveQuestion(question) {
+    currentState.activeQuestion = question;
+    return currentState;
+  }
+  
+  function setVotingActive(isActive) {
+    currentState.isVotingActive = isActive;
+    return currentState;
+  }
+  
   module.exports = {
     getCurrentState,
     updateState,
-    resetState
+    resetState,
+    setActiveQuestion,
+    setVotingActive
   };

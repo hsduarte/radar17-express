@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # Production overrides for the Node.js application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=5001
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres}@postgres:5432/radar17-debate?schema=public
+    volumes:
+      # In production, don't mount the source code
+      - /app/node_modules
+    # Use production command
+    command: ["npm", "run", "start"]
+
+  # PostgreSQL with secure passwords
+  postgres:
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=radar17-debate
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  # pgAdmin is excluded in production by default
+
+# Use named volumes in production
+volumes:
+  postgres-data:
+    driver: local

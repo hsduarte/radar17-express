@@ -1,9 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Configurações
+    // Configuration
     const API_URL = '/api';
     const socket = io();
     
-    // Estado
+    // State
     let questions = [];
     let activeQuestion = null;
     let isVotingActive = false;
@@ -12,34 +12,36 @@ document.addEventListener('DOMContentLoaded', () => {
         teamB: 0
     };
     
-    // Referências para elementos DOM
-    const questionsListEl = document.getElementById('questions-list');
-    const questionsPreviewEl = document.getElementById('questions-preview');
-    const activeQuestionTextEl = document.getElementById('active-question-text');
-    const votingStatusEl = document.getElementById('voting-status');
-    const startVotingBtn = document.getElementById('start-voting-btn');
-    const endVotingBtn = document.getElementById('end-voting-btn');
-    const resetScoresBtn = document.getElementById('reset-scores-btn');
-    const saveQuestionBtn = document.getElementById('save-question-btn');
-    const updateQuestionBtn = document.getElementById('update-question-btn');
-    const uploadBulkBtn = document.getElementById('upload-bulk-btn');
-    const refreshPreviewBtn = document.getElementById('refresh-preview-btn');
-    const teamAScoreEl = document.querySelector('#current-scores .score:first-child');
-    const teamBScoreEl = document.querySelector('#current-scores .score:last-child');
+    // Cache DOM Elements
+    const elements = {
+        questionsList: document.getElementById('questions-list'),
+        questionsPreview: document.getElementById('questions-preview'),
+        activeQuestionText: document.getElementById('active-question-text'),
+        votingStatus: document.getElementById('voting-status'),
+        startVotingBtn: document.getElementById('start-voting-btn'),
+        endVotingBtn: document.getElementById('end-voting-btn'),
+        resetScoresBtn: document.getElementById('reset-scores-btn'),
+        teamAScoreEl: document.querySelector('#current-scores .score:first-child'),
+        teamBScoreEl: document.querySelector('#current-scores .score:last-child'),
+        deactivateQuestionBtn: document.getElementById('deactivate-question-btn')
+    };
     
-    // Inicialização
+    // Initialization
     initApp();
-    initModalSystem();
     
     function initApp() {
         fetchQuestions();
         initEventListeners();
         initSocketListeners();
-        initMobileMenu();
-        initTabSystem();
+        initUiSystems();
         
-        // Mostrar notificação de boas-vindas
         showToast('Sistema de Administração Iniciado', 'Bem-vindo ao painel administrativo do RADAR 17!', 'success');
+    }
+    
+    function initUiSystems() {
+        initMobileMenu();
+        initModalSystem();
+        initTabSystem();
     }
     
     function initMobileMenu() {
@@ -118,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // Funções para carregar dados
+    // Data fetching
     async function fetchQuestions() {
         try {
             const response = await fetch(`${API_URL}/questions`);
@@ -129,9 +131,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderQuestionsList();
             renderQuestionsPreview();
         } catch (error) {
-            console.error('Erro ao carregar questões:', error);
-            if (questionsListEl) {
-                questionsListEl.innerHTML = `
+            console.error('Error loading questions:', error);
+            if (elements.questionsList) {
+                elements.questionsList.innerHTML = `
                     <div class="bg-red-100 text-red-800 p-4 rounded">
                         <i class="bi bi-exclamation-triangle mr-2"></i> 
                         Erro ao carregar questões. Verifique a conexão com o servidor.
@@ -141,14 +143,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Renderização de elementos
+    // Rendering
     function renderQuestionsList() {
-        if (!questionsListEl) return;
+        if (!elements.questionsList) return;
         
-        questionsListEl.innerHTML = '';
+        elements.questionsList.innerHTML = '';
         
         if (questions.length === 0) {
-            questionsListEl.innerHTML = `
+            elements.questionsList.innerHTML = `
                 <div class="text-center py-5">
                     <i class="bi bi-question-circle text-gray-400 text-5xl"></i>
                     <h4 class="mt-3 text-xl font-semibold">Nenhuma questão cadastrada</h4>
@@ -158,11 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Ordenar questões
+        // Sort questions
         const sortedQuestions = [...questions].sort((a, b) => a.order - b.order);
         
         sortedQuestions.forEach(question => {
-            const isActive = activeQuestion && activeQuestion._id === question._id;
+            // Ensure we have a valid ID to work with
+            const questionId = question._id || question.id;
+            const isActive = activeQuestion && (activeQuestion.id === questionId || activeQuestion._id === questionId);
             
             const questionEl = document.createElement('div');
             questionEl.className = `mb-3 p-3 rounded ${isActive ? 'bg-blue-50 border-l-4 border-blue-500' : question.isFinalized ? 'bg-red-50 border-l-4 border-red-500' : 'bg-gray-100'} ${question.isFinalized ? 'opacity-90' : ''} shadow-sm`;
@@ -192,10 +196,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         <div class="flex space-x-1">
                             ${!question.isFinalized ? 
-                                `<button class="p-3 text-yellow-600 hover:bg-gray-50 rounded edit-btn" data-id="${question._id}">
+                                `<button class="p-3 text-yellow-600 hover:bg-gray-50 rounded edit-btn" data-id="${questionId}">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <button class="p-3 text-red-600 hover:bg-red-50 rounded delete-btn" data-id="${question._id}">
+                                <button class="p-3 text-red-600 hover:bg-red-50 rounded delete-btn" data-id="${questionId}">
                                     <i class="bi bi-trash"></i>
                                 </button>` : 
                                 `<button class="p-3 text-gray-400 rounded cursor-not-allowed" disabled>
@@ -207,11 +211,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
             
-            questionsListEl.appendChild(questionEl);
+            elements.questionsList.appendChild(questionEl);
             
+            // Add event listeners to buttons
             const deleteBtn = questionEl.querySelector('.delete-btn');
             if (deleteBtn) {
-                deleteBtn.addEventListener('click', () => confirmDelete(question));
+                deleteBtn.addEventListener('click', () => confirmAction(
+                    'Tem certeza que deseja excluir esta questão? Esta ação não pode ser desfeita.',
+                    () => deleteQuestion(questionId),
+                    'danger'
+                ));
             }
             
             const editBtn = questionEl.querySelector('.edit-btn');
@@ -222,12 +231,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function renderQuestionsPreview() {
-        if (!questionsPreviewEl) return;
+        if (!elements.questionsPreview) return;
         
-        questionsPreviewEl.innerHTML = '';
+        elements.questionsPreview.innerHTML = '';
         
         if (questions.length === 0) {
-            questionsPreviewEl.innerHTML = `
+            elements.questionsPreview.innerHTML = `
                 <div class="col-span-4 text-center py-4">
                     <p class="text-gray-500">Nenhuma questão disponível</p>
                 </div>
@@ -235,14 +244,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Filtrar questões não finalizadas e ordenar
+        // Filter non-finalized questions and sort
         const availableQuestions = questions
             .filter(q => !q.isFinalized)
             .sort((a, b) => a.order - b.order)
-            .slice(0, 4); // Mostrar apenas as próximas 4
+            .slice(0, 4); // Show only the next 4
         
         if (availableQuestions.length === 0) {
-            questionsPreviewEl.innerHTML = `
+            elements.questionsPreview.innerHTML = `
                 <div class="col-span-4 text-center py-4">
                     <p class="text-gray-500">Todas as questões já foram respondidas</p>
                 </div>
@@ -251,7 +260,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         availableQuestions.forEach(question => {
-            const isActive = activeQuestion && activeQuestion._id === question._id;
+            // Ensure we have a valid ID to work with
+            const questionId = question._id || question.id;
+            const isActive = activeQuestion && (activeQuestion.id === questionId || activeQuestion._id === questionId);
             
             const colEl = document.createElement('div');
             colEl.className = 'mb-3';
@@ -265,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p class="text-sm mb-3">${question.text}</p>
                         <div class="text-center">
                             <button class="w-full py-1.5 px-3 text-sm rounded ${isActive ? 'bg-gray-300 text-gray-700' : 'bg-blue-600 hover:bg-blue-700 text-white'} quick-activate-btn" 
-                                data-id="${question._id}" ${isActive ? 'disabled' : ''}>
+                                data-id="${questionId}" ${isActive ? 'disabled' : ''}>
                                 ${isActive ? 'Selecionada' : 'Selecionar'}
                             </button>
                         </div>
@@ -273,128 +284,100 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
             
-            questionsPreviewEl.appendChild(colEl);
+            elements.questionsPreview.appendChild(colEl);
             
-            // Adicionar event listener
+            // Add event listener
             const activateBtn = colEl.querySelector('.quick-activate-btn');
             if (activateBtn) {
-                activateBtn.addEventListener('click', () => activateQuestion(question._id));
+                activateBtn.addEventListener('click', () => {
+                    const id = activateBtn.getAttribute('data-id');
+                    activateQuestion(id);
+                });
             }
         });
     }
     
     function updateScoreDisplay() {
-        if (teamAScoreEl) {
-            teamAScoreEl.textContent = currentScores.teamA;
+        if (elements.teamAScoreEl) {
+            elements.teamAScoreEl.textContent = currentScores.teamA;
         }
-        if (teamBScoreEl) {
-            teamBScoreEl.textContent = currentScores.teamB;
+        if (elements.teamBScoreEl) {
+            elements.teamBScoreEl.textContent = currentScores.teamB;
         }
     }
     
     function updateActiveQuestionDisplay() {
-        if (!activeQuestionTextEl) return;
+        if (!elements.activeQuestionText) return;
         
         if (activeQuestion) {
-            activeQuestionTextEl.textContent = activeQuestion.text;
-            activeQuestionTextEl.classList.remove('bg-gray-200');
+            elements.activeQuestionText.textContent = activeQuestion.text;
             
-            if (isVotingActive) {
-                activeQuestionTextEl.classList.add('bg-green-100', 'text-green-800');
-                activeQuestionTextEl.classList.remove('bg-yellow-100', 'text-yellow-800');
-                startVotingBtn.disabled = true;
-                endVotingBtn.disabled = false;
-                votingStatusEl.innerHTML = '<i class="bi bi-check-circle-fill mr-1 text-green-500"></i> Votação em andamento. Os participantes podem votar agora.';
-                votingStatusEl.className = 'bg-green-100 text-green-800 p-3 rounded';
-            } else {
-                activeQuestionTextEl.classList.add('bg-yellow-100', 'text-yellow-800');
-                activeQuestionTextEl.classList.remove('bg-green-100', 'text-green-800');
-                startVotingBtn.disabled = false;
-                endVotingBtn.disabled = true;
-                votingStatusEl.innerHTML = '<i class="bi bi-info-circle mr-1"></i> Questão selecionada. Clique em "Iniciar Votação" quando estiver pronto.';
-                votingStatusEl.className = 'bg-yellow-100 text-yellow-800 p-3 rounded';
+            // Show the active question controls
+            const controlsEl = document.getElementById('active-question-controls');
+            if (controlsEl) {
+                controlsEl.classList.remove('hidden');
+                
+                // Add deactivate button if needed
+                if (!document.getElementById('deactivate-question-btn') && !isVotingActive && activeQuestion.isFinalized) {
+                    const deactivateBtn = document.createElement('button');
+                    deactivateBtn.id = 'deactivate-question-btn';
+                    deactivateBtn.className = 'bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded';
+                    deactivateBtn.innerHTML = '<i class="bi bi-x-circle mr-1"></i> Desativar Questão';
+                    deactivateBtn.addEventListener('click', deactivateQuestion);
+                    
+                    controlsEl.appendChild(deactivateBtn);
+                }
             }
         } else {
-            activeQuestionTextEl.textContent = 'Nenhuma questão ativa';
-            activeQuestionTextEl.classList.add('bg-gray-200');
-            activeQuestionTextEl.classList.remove('bg-green-100', 'text-green-800', 'bg-yellow-100', 'text-yellow-800');
-            startVotingBtn.disabled = true;
-            endVotingBtn.disabled = true;
-            votingStatusEl.innerHTML = '<i class="bi bi-info-circle mr-1"></i> Selecione uma questão para ativar.';
-            votingStatusEl.className = 'bg-blue-100 text-blue-800 p-3 rounded';
+            elements.activeQuestionText.textContent = 'Nenhuma questão ativa';
+            
+            // Hide the active question controls
+            const controlsEl = document.getElementById('active-question-controls');
+            if (controlsEl) {
+                controlsEl.classList.add('hidden');
+            }
         }
     }
     
-    // Event listeners
+    // Event listeners setup
     function initEventListeners() {
-        // Event listener para adicionar questão
-        if (saveQuestionBtn) {
-            saveQuestionBtn.addEventListener('click', addQuestion);
-        }
-        
-        // Event listener para atualizar questão
-        if (updateQuestionBtn) {
-            updateQuestionBtn.addEventListener('click', updateQuestion);
-        }
-        
-        // Event listener para iniciar votação
-        if (startVotingBtn) {
-            startVotingBtn.addEventListener('click', startVoting);
-        }
-        
-        // Event listener para encerrar votação
-        if (endVotingBtn) {
-            endVotingBtn.addEventListener('click', endVoting);
-        }
-        
-        // Event listener para resetar pontuações
-        if (resetScoresBtn) {
-            resetScoresBtn.addEventListener('click', () => confirmAction(
+        // Button event listeners
+        const buttonActions = {
+            'save-question-btn': addQuestion,
+            'update-question-btn': updateQuestion,
+            'start-voting-btn': startVoting,
+            'end-voting-btn': endVoting,
+            'reset-scores-btn': () => confirmAction(
                 'Tem certeza que deseja resetar todas as pontuações?',
-                resetScores
-            ));
-        }
-        
-        // Event listener para upload em massa
-        if (uploadBulkBtn) {
-            uploadBulkBtn.addEventListener('click', bulkUploadQuestions);
-        }
-        
-        // Event listener para atualizar visualização rápida
-        if (refreshPreviewBtn) {
-            refreshPreviewBtn.addEventListener('click', () => {
+                resetScores,
+                'warning'
+            ),
+            'upload-bulk-btn': uploadBulkQuestions,
+            'refresh-preview-btn': () => {
                 fetchQuestions();
                 showToast('Lista Atualizada', 'A lista de questões foi atualizada', 'info');
-            });
-        }
-        
-        // Event listeners para ferramentas (Tab Configurações)
-        const exportJsonBtn = document.getElementById('export-json-btn');
-        if (exportJsonBtn) {
-            exportJsonBtn.addEventListener('click', exportQuestionsJson);
-        }
-        
-        const exportCsvBtn = document.getElementById('export-csv-btn');
-        if (exportCsvBtn) {
-            exportCsvBtn.addEventListener('click', exportResultsCsv);
-        }
-        
-        const clearAllBtn = document.getElementById('clear-all-btn');
-        if (clearAllBtn) {
-            clearAllBtn.addEventListener('click', () => confirmAction(
+            },
+            'export-json-btn': exportQuestionsJson,
+            'export-csv-btn': exportResultsCsv,
+            'clear-all-btn': () => confirmAction(
                 'Tem certeza que deseja limpar todos os dados? Esta ação não pode ser desfeita.',
-                clearAllData
-            ));
-        }
-        
-        const resetDatabaseBtn = document.getElementById('reset-database-btn');
-        if (resetDatabaseBtn) {
-            resetDatabaseBtn.addEventListener('click', () => confirmAction(
+                clearAllData,
+                'warning'
+            ),
+            'reset-database-btn': () => confirmAction(
                 'ATENÇÃO: Esta ação irá resetar completamente a base de dados, removendo todas as questões e votos. Esta ação NÃO PODE ser desfeita.',
                 resetDatabase,
                 'danger'
-            ));
-        }
+            )
+        };
+        
+        // Attach listeners to all defined buttons
+        Object.entries(buttonActions).forEach(([id, action]) => {
+            const button = document.getElementById(id);
+            if (button) {
+                button.addEventListener('click', action);
+            }
+        });
         
         // Settings form submit
         const settingsForm = document.querySelector('#settings-tab-pane form');
@@ -403,44 +386,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 saveSettings();
             });
-            
-            // Also add click listener to the submit button as a fallback
-            const saveSettingsBtn = settingsForm.querySelector('button[type="submit"]');
-            if (saveSettingsBtn) {
-                saveSettingsBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    saveSettings();
-                });
-            }
         }
     }
     
     // Socket listeners
     function initSocketListeners() {
         socket.on('connect', () => {
-            console.log('Conectado ao servidor de websocket');
+            console.log('Connected to websocket server');
         });
         
         socket.on('disconnect', () => {
-            console.log('Desconectado do servidor de websocket');
+            console.log('Disconnected from websocket server');
             showToast('Desconectado', 'A conexão com o servidor foi perdida. Tentando reconectar...', 'error');
         });
         
         socket.on('currentState', (state) => {
-            console.log('Estado atual recebido:', state);
-            currentScores.teamA = state.teamAScore;
-            currentScores.teamB = state.teamBScore;
-            activeQuestion = state.activeQuestion;
-            isVotingActive = state.isVotingActive;
+            console.log('Current state received:', state);
             
-            updateScoreDisplay();
-            updateActiveQuestionDisplay();
+            // Update active question
+            if (state.activeQuestion) {
+                activeQuestion = state.activeQuestion;
+                updateActiveQuestionDisplay();
+            }
+            
+            // Update voting status
+            isVotingActive = state.isVotingActive;
+            updateVotingControls();
+            
+            // Update scores
+            if (state.teamAScore !== undefined && state.teamBScore !== undefined) {
+                currentScores.teamA = state.teamAScore;
+                currentScores.teamB = state.teamBScore;
+                updateScoreDisplay();
+            }
         });
         
         socket.on('teamNamesUpdated', (data) => {
-            console.log('Nomes das equipas atualizados:', data);
+            console.log('Team names updated:', data);
             
-            // Atualizar nomes das equipas no painel administrativo
+            // Update team names in admin panel
             const teamANameEl = document.querySelector('#current-scores .text-blue-600');
             const teamBNameEl = document.querySelector('#current-scores .text-red-600');
             
@@ -452,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 teamBNameEl.innerHTML = `${data.teamBName}: <span class="score">${currentScores.teamB}</span>`;
             }
             
-            // Atualizar os campos de entrada no formulário de configurações
+            // Update input fields in settings form
             const teamANameInput = document.getElementById('teamA-name');
             const teamBNameInput = document.getElementById('teamB-name');
             
@@ -466,47 +450,120 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         socket.on('questionActivated', (data) => {
-            console.log('Questão ativada:', data);
+            console.log('Question activated:', data);
             activeQuestion = data.question;
             isVotingActive = data.isVotingActive;
             
             updateActiveQuestionDisplay();
-            fetchQuestions(); // Recarregar lista de questões
-            
-            showToast('Questão Ativada', `Questão #${activeQuestion.order} selecionada`, 'success');
+            updateVotingControls();
+            renderQuestionsList();
+            renderQuestionsPreview();
         });
         
-        socket.on('questionFinalized', (data) => {
-            console.log('Questão finalizada:', data);
+        socket.on('votingStarted', () => {
+            console.log('Voting started');
+            isVotingActive = true;
+            updateVotingControls();
+            
+            showToast('Votação Iniciada', 'A votação foi iniciada com sucesso', 'success');
+        });
+        
+        socket.on('votingEnded', (data) => {
+            console.log('Voting ended:', data);
             isVotingActive = false;
-            currentScores.teamA = data.totalScores.teamA;
-            currentScores.teamB = data.totalScores.teamB;
+            updateVotingControls();
             
-            updateScoreDisplay();
-            updateActiveQuestionDisplay();
-            fetchQuestions(); // Recarregar lista de questões
+            // Update scores
+            if (data.results) {
+                showToast('Votação Encerrada', `Resultados: Equipa A: ${data.results.teamA}, Equipa B: ${data.results.teamB}`, 'info');
+            } else {
+                showToast('Votação Encerrada', 'A votação foi encerrada com sucesso', 'info');
+            }
             
-            showToast('Votação Finalizada', `Resultados registrados: Equipa A (${data.results.teamA}) - Equipa B (${data.results.teamB})`, 'info');
+            // Refresh questions to get updated vote counts
+            fetchQuestions();
         });
         
         socket.on('scoresReset', (data) => {
-            console.log('Pontuações resetadas:', data);
+            console.log('Scores reset:', data);
             currentScores.teamA = data.teamA;
             currentScores.teamB = data.teamB;
             
             updateScoreDisplay();
-            fetchQuestions(); // Recarregar lista de questões
+            fetchQuestions(); // Reload questions list
             
             showToast('Pontuações Resetadas', 'Todas as pontuações foram resetadas para 0', 'warning');
         });
         
         socket.on('error', (error) => {
-            console.error('Erro do servidor:', error);
+            console.error('Server error:', error);
             showToast('Erro', error.message || 'Ocorreu um erro no servidor', 'error');
+        });
+        
+        socket.on('questionDeleted', (data) => {
+            console.log('Question deleted event received:', data);
+            if (data && data.id) {
+                // Remove from local array
+                const index = questions.findIndex(q => q.id === data.id);
+                if (index !== -1) {
+                    questions.splice(index, 1);
+                    // Update UI
+                    renderQuestionsList();
+                    renderQuestionsPreview();
+                }
+                showToast('Questão Removida', 'Uma questão foi removida com sucesso', 'info');
+            }
         });
     }
     
-    // Funções de ação
+    // Update voting controls based on state
+    function updateVotingControls() {
+        if (!elements.startVotingBtn || !elements.endVotingBtn) return;
+        
+        // Update button states based on active question and voting status
+        if (activeQuestion) {
+            elements.startVotingBtn.disabled = isVotingActive || activeQuestion.isFinalized;
+            elements.endVotingBtn.disabled = !isVotingActive;
+            
+            // Update voting status message
+            if (elements.votingStatus) {
+                if (isVotingActive) {
+                    elements.votingStatus.className = 'bg-green-100 text-green-800 p-3 rounded';
+                    elements.votingStatus.innerHTML = '<i class="bi bi-check-circle mr-1"></i> Votação em andamento. Os participantes podem votar agora.';
+                } else if (activeQuestion.isFinalized) {
+                    elements.votingStatus.className = 'bg-red-100 text-red-800 p-3 rounded';
+                    elements.votingStatus.innerHTML = '<i class="bi bi-x-circle mr-1"></i> Votação encerrada. Resultados: Equipa A: ' + 
+                        activeQuestion.teamAVotes + ', Equipa B: ' + activeQuestion.teamBVotes;
+                    
+                    // Add deactivate button if it doesn't exist
+                    const controlsEl = document.getElementById('active-question-controls');
+                    if (controlsEl && !document.getElementById('deactivate-question-btn')) {
+                        const deactivateBtn = document.createElement('button');
+                        deactivateBtn.id = 'deactivate-question-btn';
+                        deactivateBtn.className = 'bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded';
+                        deactivateBtn.innerHTML = '<i class="bi bi-x-circle mr-1"></i> Desativar Questão';
+                        deactivateBtn.addEventListener('click', deactivateQuestion);
+                        
+                        controlsEl.appendChild(deactivateBtn);
+                    }
+                } else {
+                    elements.votingStatus.className = 'bg-blue-100 text-blue-800 p-3 rounded';
+                    elements.votingStatus.innerHTML = '<i class="bi bi-info-circle mr-1"></i> Questão selecionada. Clique em "Iniciar Votação" para permitir votos.';
+                }
+            }
+        } else {
+            elements.startVotingBtn.disabled = true;
+            elements.endVotingBtn.disabled = true;
+            
+            // Update voting status message
+            if (elements.votingStatus) {
+                elements.votingStatus.className = 'bg-blue-100 text-blue-800 p-3 rounded';
+                elements.votingStatus.innerHTML = '<i class="bi bi-info-circle mr-1"></i> Selecione uma questão para ativar.';
+            }
+        }
+    }
+    
+    // Actions
     async function addQuestion() {
         const textEl = document.getElementById('question-text');
         const orderEl = document.getElementById('question-order');
@@ -540,31 +597,39 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const newQuestion = await response.json();
             
-            // Limpar campos
+            // Clear fields
             textEl.value = '';
             orderEl.value = '';
             
-            // Fechar modal
+            // Close modal
             document.getElementById('addQuestionModal').classList.add('hidden');
             
-            // Recarregar questões
+            // Reload questions
             fetchQuestions();
             
-            // Notificar usuário
+            // Notify user
             showToast('Questão Adicionada', `A questão #${newQuestion.order} foi adicionada com sucesso`, 'success');
             
         } catch (error) {
-            console.error('Erro ao adicionar questão:', error);
+            console.error('Error adding question:', error);
             showToast('Erro', error.message, 'error');
         }
     }
     
     function openEditModal(question) {
-        document.getElementById('edit-question-id').value = question._id;
-        document.getElementById('edit-question-text').value = question.text;
-        document.getElementById('edit-question-order').value = question.order;
+        // Ensure we have a valid ID to work with
+        const questionId = question._id || question.id;
         
-        document.getElementById('editQuestionModal').classList.remove('hidden');
+        const editIdField = document.getElementById('edit-question-id');
+        const editTextField = document.getElementById('edit-question-text');
+        const editOrderField = document.getElementById('edit-question-order');
+        
+        if (editIdField) editIdField.value = questionId;
+        if (editTextField) editTextField.value = question.text;
+        if (editOrderField) editOrderField.value = question.order;
+        
+        const modal = document.getElementById('editQuestionModal');
+        if (modal) modal.classList.remove('hidden');
     }
     
     async function updateQuestion() {
@@ -572,18 +637,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const textEl = document.getElementById('edit-question-text');
         const orderEl = document.getElementById('edit-question-order');
         
-        if (!textEl.value.trim()) {
+        if (!textEl || !textEl.value.trim()) {
             showInputError(textEl, 'Por favor, insira o texto da questão');
             return;
         }
         
-        if (!orderEl.value || orderEl.value < 1) {
+        if (!orderEl || !orderEl.value || orderEl.value < 1) {
             showInputError(orderEl, 'Por favor, insira um número de ordem válido (> 0)');
             return;
         }
         
+        const id = idEl ? idEl.value : null;
+        if (!id) {
+            showToast('Erro', 'ID da questão não encontrado', 'error');
+            return;
+        }
+        
         try {
-            const response = await fetch(`${API_URL}/questions/${idEl.value}`, {
+            const response = await fetch(`${API_URL}/questions/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json'
@@ -601,53 +672,60 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const updatedQuestion = await response.json();
             
-            // Fechar modal
-            document.getElementById('editQuestionModal').classList.add('hidden');
+            // Close modal
+            const modal = document.getElementById('editQuestionModal');
+            if (modal) modal.classList.add('hidden');
             
-            // Recarregar questões
+            // Reload questions
             fetchQuestions();
             
-            // Notificar usuário
+            // Notify user
             showToast('Questão Atualizada', `A questão #${updatedQuestion.order} foi atualizada com sucesso`, 'success');
             
         } catch (error) {
-            console.error('Erro ao atualizar questão:', error);
-            showToast('Erro', error.message, 'error');
+            showToast('Erro', `Falha ao atualizar questão: ${error.message}`, 'error');
         }
     }
     
-    function confirmDelete(question) {
-        confirmAction(
-            `Tem certeza que deseja excluir a questão #${question.order}?`,
-            () => deleteQuestion(question._id),
-            'warning'
-        );
-    }
-    
     async function deleteQuestion(id) {
+        if (!id) {
+            showToast('Erro', 'ID da questão não definido', 'error');
+            return;
+        }
+        
         try {
+            // Ensure we're using the correct endpoint format and ID parameter
             const response = await fetch(`${API_URL}/questions/${id}`, {
                 method: 'DELETE'
             });
             
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Erro ao excluir questão');
+                throw new Error(`Falha ao excluir questão: ${response.status}`);
             }
             
-            // Recarregar questões
-            fetchQuestions();
+            // Remove the question from our local array
+            const index = questions.findIndex(q => q._id === id || q.id === id);
+            if (index !== -1) {
+                questions.splice(index, 1);
+            }
             
-            // Notificar usuário
-            showToast('Questão Excluída', 'A questão foi excluída com sucesso', 'success');
+            // Refresh the UI
+            renderQuestionsList();
+            renderQuestionsPreview();
+            
+            showToast('Questão Removida', 'A questão foi removida com sucesso', 'success');
             
         } catch (error) {
-            console.error('Erro ao excluir questão:', error);
-            showToast('Erro', error.message, 'error');
+            showToast('Erro', `Falha ao excluir questão: ${error.message}`, 'error');
         }
     }
     
     async function activateQuestion(id) {
+        if (!id) {
+            showToast('Erro', 'ID da questão é obrigatório', 'error');
+            return;
+        }
+        
         try {
             const response = await fetch(`${API_URL}/admin/activate-question`, {
                 method: 'POST',
@@ -664,28 +742,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || 'Erro ao ativar questão');
             }
             
-            // O resto será atualizado via socket
+            // Find the question in our local array
+            const selectedQuestion = questions.find(q => q._id === id || q.id === id);
+            if (selectedQuestion) {
+                // Update only this question as active
+                activeQuestion = selectedQuestion;
+                
+                // Update UI immediately without waiting for socket
+                updateActiveQuestionDisplay();
+                updateVotingControls();
+                renderQuestionsList();
+                renderQuestionsPreview();
+            }
             
         } catch (error) {
-            console.error('Erro ao ativar questão:', error);
             showToast('Erro', error.message, 'error');
         }
     }
     
-    async function startVoting() {
-        if (!activeQuestion) {
-            showToast('Erro', 'Nenhuma questão ativa para iniciar votação', 'error');
-            return;
-        }
+    function deactivateQuestion() {
+        activeQuestion = null;
+        updateActiveQuestionDisplay();
+        updateVotingControls();
+        renderQuestionsList();
+        renderQuestionsPreview();
         
+        showToast('Questão Desativada', 'A questão foi desativada com sucesso', 'info');
+    }
+    
+    // Function to start voting
+    async function startVoting() {
         try {
+            // Get the active question ID
+            if (!activeQuestion || !activeQuestion.id) {
+                throw new Error("ID da questão é obrigatório");
+            }
+            
+            const questionId = activeQuestion.id;
+            console.log("Starting voting for question ID:", questionId);
+            
             const response = await fetch(`${API_URL}/admin/start-voting`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    questionId: activeQuestion._id
+                    questionId: questionId
                 })
             });
             
@@ -694,22 +796,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || 'Erro ao iniciar votação');
             }
             
-            isVotingActive = true;
-            updateActiveQuestionDisplay();
-            
-            // Notificar usuário
-            showToast('Votação Iniciada', 'Os participantes podem começar a votar agora', 'success');
+            // The rest will be updated via socket
+            showToast('Votação Iniciada', 'A votação foi iniciada com sucesso', 'success');
             
         } catch (error) {
-            console.error('Erro ao iniciar votação:', error);
+            console.error('Error starting voting:', error);
             showToast('Erro', error.message, 'error');
         }
     }
     
+    // Function to end voting
     async function endVoting() {
         try {
-            const response = await fetch(`${API_URL}/admin/finalize-question`, {
-                method: 'POST'
+            // Get the active question ID
+            if (!activeQuestion || !activeQuestion.id) {
+                throw new Error("ID da questão é obrigatório");
+            }
+            
+            const questionId = activeQuestion.id;
+            console.log("Ending voting for question ID:", questionId);
+            
+            const response = await fetch(`${API_URL}/admin/end-voting`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    questionId: questionId
+                })
             });
             
             if (!response.ok) {
@@ -717,10 +831,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || 'Erro ao encerrar votação');
             }
             
-            // O resto será atualizado via socket
+            // The rest will be updated via socket
             
         } catch (error) {
-            console.error('Erro ao encerrar votação:', error);
+            console.error('Error ending voting:', error);
             showToast('Erro', error.message, 'error');
         }
     }
@@ -736,47 +850,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || 'Erro ao resetar pontuações');
             }
             
-            // O resto será atualizado via socket
+            // The rest will be updated via socket
             
         } catch (error) {
-            console.error('Erro ao resetar pontuações:', error);
+            console.error('Error resetting scores:', error);
             showToast('Erro', error.message, 'error');
         }
     }
     
-    async function bulkUploadQuestions() {
-        // Get the textarea instead of file input
-        const bulkQuestionsTextarea = document.getElementById('bulk-questions');
-        
-        if (!bulkQuestionsTextarea || !bulkQuestionsTextarea.value.trim()) {
-            showToast('Erro', 'Por favor, insira pelo menos uma questão', 'error');
-            return;
-        }
-        
-        // Parse questions from textarea (one per line)
-        const questionsText = bulkQuestionsTextarea.value.trim();
-        const questionLines = questionsText.split('\n').filter(line => line.trim().length > 0);
-        
-        if (questionLines.length === 0) {
-            showToast('Erro', 'Por favor, insira pelo menos uma questão válida', 'error');
-            return;
-        }
-        
+    // Function to handle bulk upload of questions
+    async function uploadBulkQuestions() {
         try {
-            // Get the highest current order
-            let highestOrder = 0;
-            if (questions.length > 0) {
-                highestOrder = Math.max(...questions.map(q => q.order || 0));
+            const bulkQuestionsText = document.getElementById('bulk-questions').value.trim();
+            
+            if (!bulkQuestionsText) {
+                throw new Error('Por favor, insira pelo menos uma questão');
             }
             
-            // Create question objects
-            const newQuestions = questionLines.map((text, index) => ({
-                text: text.trim(),
-                order: highestOrder + index + 1
-            }));
+            // Split by new lines
+            const questionTexts = bulkQuestionsText.split('\n')
+                .map(text => text.trim())
+                .filter(text => text.length > 0);
             
-            // Send to server - using the correct endpoint from your routes/questions.js file
-            const response = await fetch(`${API_URL}/questions/bulk`, {
+            if (questionTexts.length === 0) {
+                throw new Error('Por favor, insira pelo menos uma questão válida');
+            }
+            
+            // Create question objects with just text (order will be assigned by the server)
+            const newQuestions = questionTexts.map(text => ({ text }));
+            
+            console.log("Bulk uploading questions:", newQuestions);
+            
+            const response = await fetch(`${API_URL}/admin/bulk`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -786,36 +891,33 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Erro ao fazer upload em massa');
+                throw new Error(errorData.error || 'Erro ao carregar questões em massa');
             }
             
-            // Fechar modal
+            const result = await response.json();
+            
+            // Close modal and refresh questions
             document.getElementById('bulkUploadModal').classList.add('hidden');
+            document.getElementById('bulk-questions').value = '';
             
-            // Limpar campo de texto
-            bulkQuestionsTextarea.value = '';
-            
-            // Recarregar questões
             fetchQuestions();
             
-            // Notificar usuário
-            showToast('Upload Concluído', `${newQuestions.length} questões foram adicionadas com sucesso`, 'success');
+            showToast('Questões Adicionadas', `${result.count || newQuestions.length} questões foram adicionadas com sucesso`, 'success');
             
         } catch (error) {
-            console.error('Erro ao adicionar questões em massa:', error);
+            console.error('Error bulk uploading questions:', error);
             showToast('Erro', error.message, 'error');
         }
     }
     
-    // Funções para ferramentas (Tab Configurações)
+    // Tools functions (Settings Tab)
     function exportQuestionsJson() {
         if (questions.length === 0) {
-            showToast('Nenhum Dado', 'Não há questões para exportar', 'warning');
             showToast('Nenhum Dado', 'Não há questões para exportar', 'warning');
             return;
         }
         
-        // Organizar dados
+        // Organize data
         const exportData = questions.map(q => ({
             order: q.order,
             text: q.text,
@@ -824,17 +926,9 @@ document.addEventListener('DOMContentLoaded', () => {
             teamBVotes: q.teamBVotes || 0
         }));
         
-        // Criar e baixar arquivo JSON
+        // Create and download JSON file
         const jsonData = JSON.stringify(exportData, null, 2);
-        const blob = new Blob([jsonData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'questions.json';
-        a.click();
-        
-        URL.revokeObjectURL(url);
+        downloadFile(jsonData, 'questions.json', 'application/json');
     }
     
     function exportResultsCsv() {
@@ -843,7 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Filtrar questões finalizadas e ordenar
+        // Filter finalized questions and sort
         const finalizedQuestions = questions
             .filter(q => q.isFinalized)
             .sort((a, b) => a.order - b.order);
@@ -853,19 +947,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Criar dados CSV
+        // Create CSV data
         let csvData = 'Número,Questão,Equipa A,Equipa B\n';
         finalizedQuestions.forEach(q => {
             csvData += `${q.order},"${q.text}",${q.teamAVotes || 0},${q.teamBVotes || 0}\n`;
         });
         
-        // Criar e baixar arquivo CSV
-        const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+        // Download CSV file
+        downloadFile(csvData, 'results.csv', 'text/csv;charset=utf-8;');
+    }
+    
+    // Helper function for file downloads
+    function downloadFile(data, filename, type) {
+        const blob = new Blob([data], { type });
         const url = URL.createObjectURL(blob);
         
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'results.csv';
+        a.download = filename;
         a.click();
         
         URL.revokeObjectURL(url);
@@ -882,14 +981,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || 'Erro ao limpar todos os dados');
             }
             
-            // Recarregar questões
+            // Reload questions
             fetchQuestions();
             
-            // Notificar usuário
+            // Notify user
             showToast('Dados Limpos', 'Todos os dados foram limpos com sucesso', 'success');
             
         } catch (error) {
-            console.error('Erro ao limpar todos os dados:', error);
+            console.error('Error clearing all data:', error);
             showToast('Erro', error.message, 'error');
         }
     }
@@ -905,20 +1004,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorData.error || 'Erro ao resetar a base de dados');
             }
             
-            // Recarregar questões
+            // Reload questions
             fetchQuestions();
             
-            // Notificar usuário
+            // Notify user
             showToast('Base de Dados Resetada', 'A base de dados foi resetada com sucesso', 'success');
             
         } catch (error) {
-            console.error('Erro ao resetar a base de dados:', error);
+            console.error('Error resetting database:', error);
             showToast('Erro', error.message, 'error');
         }
     }
     
     async function saveSettings() {
-        // Get form elements, with null checks
+        // Get form elements with null checks
         const teamANameEl = document.getElementById('teamA-name');
         const teamBNameEl = document.getElementById('teamB-name');
         const debateTitleEl = document.getElementById('debate-title');
@@ -942,7 +1041,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('radar17-settings', JSON.stringify(settings));
         
         try {
-            // Try to save team names on the server using the correct endpoint
+            // Try to save team names on the server
             const response = await fetch(`${API_URL}/admin/update-team-names`, {
                 method: 'POST',
                 headers: {
@@ -967,7 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Configurações Salvas', 'As configurações foram salvas com sucesso', 'success');
             
         } catch (error) {
-            console.error('Erro ao salvar configurações:', error);
+            console.error('Error saving settings:', error);
             
             // Even if there's an error with the server, we've saved locally
             if (socket && socket.connected) {
@@ -979,8 +1078,116 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // Generic confirmation dialog function
+    function confirmAction(message, action, type = 'info') {
+        // Create modal for confirmation
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
+        modal.id = 'confirm-action-modal';
+        
+        // Set icon and color based on type
+        let iconClass, headerClass, buttonClass;
+        switch(type) {
+            case 'danger':
+                iconClass = 'bi-exclamation-triangle-fill text-red-600';
+                headerClass = 'text-red-600';
+                buttonClass = 'bg-red-600 hover:bg-red-700';
+                break;
+            case 'warning':
+                iconClass = 'bi-exclamation-triangle text-yellow-600';
+                headerClass = 'text-yellow-600';
+                buttonClass = 'bg-yellow-600 hover:bg-yellow-700';
+                break;
+            default: // info
+                iconClass = 'bi-question-circle text-blue-600';
+                headerClass = 'text-blue-600';
+                buttonClass = 'bg-blue-600 hover:bg-blue-700';
+        }
+        
+        // Set modal content
+        modal.innerHTML = `
+            <div class="relative w-full max-w-md mx-auto bg-white rounded-lg shadow-xl overflow-hidden">
+                <div class="px-6 py-4">
+                    <div class="flex items-center mb-3">
+                        <i class="bi ${iconClass} text-2xl mr-3"></i>
+                        <h3 class="text-lg font-bold ${headerClass}">Confirmação</h3>
+                    </div>
+                    <p class="text-gray-700">${message}</p>
+                </div>
+                <div class="px-6 py-3 bg-gray-50 flex justify-end space-x-3">
+                    <button id="confirm-cancel-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors">
+                        Cancelar
+                    </button>
+                    <button id="confirm-action-btn" class="px-4 py-2 text-sm font-medium text-white ${buttonClass} rounded hover:opacity-90 transition-colors">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Add to DOM
+        document.body.appendChild(modal);
+        
+        // Set up event handlers
+        const cancelBtn = modal.querySelector('#confirm-cancel-btn');
+        const confirmBtn = modal.querySelector('#confirm-action-btn');
+        
+        // Create promise to handle the result
+        return new Promise((resolve) => {
+            // Cancel button closes the modal and resolves with false
+            cancelBtn.addEventListener('click', () => {
+                document.body.removeChild(modal);
+                resolve(false);
+            });
+            
+            // Confirm button closes the modal, calls the action, and resolves with true
+            confirmBtn.addEventListener('click', () => {
+                document.body.removeChild(modal);
+                if (typeof action === 'function') {
+                    action();
+                }
+                resolve(true);
+            });
+            
+            // Click outside the modal also cancels
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                    resolve(false);
+                }
+            });
+        });
+    }
+    
+    function showInputError(inputEl, message) {
+        // Add error styling to the input
+        inputEl.classList.add('border-red-500', 'bg-red-50');
+        
+        // Check if error message already exists
+        let errorEl = inputEl.nextElementSibling;
+        if (!errorEl || !errorEl.classList.contains('error-message')) {
+            errorEl = document.createElement('p');
+            errorEl.className = 'text-red-500 text-sm mt-1 error-message';
+            inputEl.parentNode.insertBefore(errorEl, inputEl.nextSibling);
+        }
+        
+        errorEl.textContent = message;
+        
+        // Remove error after user starts typing
+        const clearError = () => {
+            inputEl.classList.remove('border-red-500', 'bg-red-50');
+            if (errorEl) {
+                errorEl.textContent = '';
+            }
+            inputEl.removeEventListener('input', clearError);
+        };
+        
+        inputEl.addEventListener('input', clearError);
+    }
+    
+    // Toast notification system
     function showToast(title, message, type = 'info') {
-        // Verificar se já existe um container de toasts
+        // Check if toast container exists
         let toastContainer = document.querySelector('.toast-container');
         
         if (!toastContainer) {
@@ -989,11 +1196,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.appendChild(toastContainer);
         }
         
-        // Criar um novo toast
+        // Create new toast
         const toastId = 'toast-' + Date.now();
         const toast = document.createElement('div');
         
-        // Definir classes com base no tipo
+        // Set classes based on type
         let bgColor, textColor, borderColor, iconClass;
         switch(type) {
             case 'success':
@@ -1033,7 +1240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p class="text-sm">${message}</p>
                     </div>
                 </div>
-                <button class="text-gray-500 hover:text-gray-700 ml-4" onclick="this.parentElement.parentElement.remove()">
+                <button class="text-gray-500 hover:text-gray-700 ml-4">
                     <i class="bi bi-x"></i>
                 </button>
             </div>
@@ -1041,105 +1248,25 @@ document.addEventListener('DOMContentLoaded', () => {
         
         toastContainer.appendChild(toast);
         
+        // Add close event to the button
+        const closeBtn = toast.querySelector('button');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            });
+        }
+        
         // Auto-remove after 5 seconds
         setTimeout(() => {
             toast.classList.add('opacity-0');
             setTimeout(() => {
-                toast.remove();
+                if (toast.parentElement) {
+                    toast.remove();
+                }
             }, 300);
         }, 5000);
     }
-    
-    function showInputError(inputEl, message) {
-        // Implementação do erro de entrada aqui
-    }
-    
-    function confirmAction(message, action, type = 'info') {
-        // Create a modal for confirmation
-        const modalId = 'confirm-action-modal';
-        let modal = document.getElementById(modalId);
-        
-        // If modal doesn't exist, create it
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = modalId;
-            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
-            document.body.appendChild(modal);
-        }
-        
-        // Set icon and color based on type
-        let iconClass, headerClass, buttonClass;
-        switch(type) {
-            case 'danger':
-                iconClass = 'bi-exclamation-triangle-fill text-red-600';
-                headerClass = 'text-red-600';
-                buttonClass = 'bg-red-600 hover:bg-red-700';
-                break;
-            case 'warning':
-                iconClass = 'bi-exclamation-triangle text-yellow-600';
-                headerClass = 'text-yellow-600';
-                buttonClass = 'bg-yellow-600 hover:bg-yellow-700';
-                break;
-            default: // info
-                iconClass = 'bi-question-circle text-blue-600';
-                headerClass = 'text-blue-600';
-                buttonClass = 'bg-blue-600 hover:bg-blue-700';
-        }
-        
-        // Set modal content
-        modal.innerHTML = `
-            <div class="relative w-full max-w-md mx-auto bg-white rounded-lg shadow-xl overflow-hidden">
-                <div class="px-6 py-4">
-                    <div class="flex items-center mb-3">
-                        <i class="bi ${iconClass} text-2xl mr-3 ml-3"></i>
-                        <h3 class="text-lg font-bold ${headerClass}">Confirmação</h3>
-                    </div>
-                    <p class="text-gray-700 mr-3 ml-3">${message}</p>
-                </div>
-                <div class="px-6 py-3 bg-gray-50 flex justify-end space-x-3">
-                    <button id="confirm-cancel-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors">
-                        Cancelar
-                    </button>
-                    <button id="confirm-action-btn" class="px-4 py-2 mr-3 ml-3 text-sm font-medium text-white ${buttonClass} rounded hover:opacity-90 transition-colors">
-                        Confirmar
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        const cancelBtn = modal.querySelector('#confirm-cancel-btn'); // Use querySelector scoped to modal
-    const confirmBtn = modal.querySelector('#confirm-action-btn'); // Use querySelector scoped to modal
-
-    // Add event listeners DIRECTLY to these buttons
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
-            modal.classList.add('hidden');
-        });
-    } else {
-        console.error("Confirm modal: Cancel button not found");
-    }
-
-    if (confirmBtn) {
-        confirmBtn.addEventListener('click', () => {
-            modal.classList.add('hidden');
-            action(); // Execute the provided action function
-        });
-    } else {
-        console.error("Confirm modal: Confirm button not found");
-    }
-
-
-    // --- End Simplified Listener Attachment ---
-
-
-    // Listener to close when clicking outside the modal content
-    modal.addEventListener('click', (e) => {
-        // Check if the click target is the modal background itself, not its content
-        if (e.target === modal) {
-            modal.classList.add('hidden');
-        }
-    });
-
-    // Show the modal
-    modal.classList.remove('hidden');
-}})
+});

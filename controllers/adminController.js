@@ -1,216 +1,88 @@
-const Question = require('../models/Question');
-const Vote = require('../models/Vote');
+const prisma = require('../services/prismaService');
 const socketService = require('../services/socketService');
 const stateService = require('../services/stateService');
 
-// Ativar uma questão
+// Activate question
 async function activateQuestion(questionId) {
   try {
-    const question = await Question.findById(questionId);
-    if (!question) {
-      throw new Error('Questão não encontrada');
+    // Validate questionId
+    if (!questionId) {
+      throw new Error('ID da questão é obrigatório');
     }
-    
-    // Finalizar questão anterior se existir
-    const currentState = stateService.getCurrentState();
-    if (currentState.activeQuestion) {
-      await finalizeQuestion();
-    }
-    
-    // Desativar todas as questões antes
-    await Question.updateMany({}, { isActive: false });
-    
-    // Ativar a questão selecionada
-    question.isActive = true;
-    await question.save();
-    
-    // Atualizar estado global
-    const newState = {
+
+    // First, deactivate any currently active question
+    await prisma.question.updateMany({
+      where: { isActive: true },
+      data: { isActive: false }
+    });
+
+    // Set the new active question
+    const question = await prisma.question.update({
+      where: { id: questionId },
+      data: { isActive: true }
+    });
+
+    // Notify clients via socket
+    const io = socketService.getIO();
+    io.emit('questionActivated', { 
+      question,
+      isVotingActive: false
+    });
+
+    // Update state
+    stateService.updateState({
       activeQuestion: question,
       isVotingActive: false
-    };
-    
-    if (!currentState.questionScores[questionId]) {
-      newState.questionScores = {
-        ...currentState.questionScores,
-        [questionId]: { teamA: 0, teamB: 0 }
-      };
-    }
-    
-    stateService.updateState(newState);
-    
-    // Notificar todos os clientes
-    socketService.getIO().emit('questionActivated', {
-      question: question,
-      isVotingActive: false
     });
-    
+
     return question;
   } catch (error) {
-    console.error('Erro ao ativar questão:', error);
+    console.error('Error activating question:', error);
     throw error;
   }
 }
 
-// Iniciar votação
-async function startVoting() {
-  try {
-    const currentState = stateService.getCurrentState();
-    
-    if (!currentState.activeQuestion) {
-      throw new Error('Nenhuma questão ativa para iniciar votação');
-    }
-    
-    // Atualizar estado
-    stateService.updateState({ isVotingActive: true });
-    
-    // Notificar clientes
-    socketService.getIO().emit('votingStarted', {
-      questionId: currentState.activeQuestion._id,
-      isVotingActive: true
-    });
-    
-    return true;
-  } catch (error) {
-    console.error('Erro ao iniciar votação:', error);
-    throw error;
-  }
-}
-
-// Finalizar questão atual
-async function finalizeQuestion() {
-  const currentState = stateService.getCurrentState();
-  
-  if (!currentState.activeQuestion) {
-    return;
-  }
-  
-  try {
-    const questionId = currentState.activeQuestion._id;
-    
-    // Contar votos para esta questão
-    const votes = await Vote.find({ questionId });
-    let teamAVotes = 0;
-    let teamBVotes = 0;
-    
-    votes.forEach(vote => {
-      if (vote.teamVoted === 'A') {
-        teamAVotes++;
-      } else if (vote.teamVoted === 'B') {
-        teamBVotes++;
-      }
-    });
-    
-    // Atualizar question scores
-    const questionScores = {
-      ...currentState.questionScores,
-      [questionId]: { teamA: teamAVotes, teamB: teamBVotes }
-    };
-    
-    // Atualizar score total
-    const teamAScore = currentState.teamAScore + teamAVotes;
-    const teamBScore = currentState.teamBScore + teamBVotes;
-    
-    // Salvar resultados da questão no banco de dados
-    await Question.findByIdAndUpdate(questionId, {
-      isActive: false,
-      isFinalized: true,
-      teamAVotes,
-      teamBVotes
-    });
-    
-    // Atualizar estado global
-    stateService.updateState({
-      activeQuestion: null,
-      isVotingActive: false,
-      teamAScore,
-      teamBScore,
-      questionScores
-    });
-    
-    // Notificar clientes
-    socketService.getIO().emit('questionFinalized', {
-      questionId,
-      results: {
-        teamA: teamAVotes,
-        teamB: teamBVotes
-      },
-      totalScores: {
-        teamA: teamAScore,
-        teamB: teamBScore
-      }
-    });
-    
-    return {
-      teamAVotes,
-      teamBVotes
-    };
-  } catch (error) {
-    console.error('Erro ao finalizar questão:', error);
-    throw error;
-  }
-}
-
+// Update team names
 async function updateTeamNames(teamAName, teamBName) {
-  try {
-    stateService.updateState({
-      teamAName: teamAName || "Equipa A",
-      teamBName: teamBName || "Equipa B"
+  // Find active session or create one
+  let session = await prisma.session.findFirst({
+    where: { isActive: true }
+  });
+  
+  if (!session) {
+    session = await prisma.session.create({
+      data: {
+        name: 'Default Session',
+        isActive: true,
+        teamAName: teamAName || 'Equipa A',
+        teamBName: teamBName || 'Equipa B'
+      }
     });
-    
-    const currentState = stateService.getCurrentState();
-    
-    // Notificar todos os clientes
-    socketService.getIO().emit('teamNamesUpdated', {
-      teamAName: currentState.teamAName,
-      teamBName: currentState.teamBName
+  } else {
+    session = await prisma.session.update({
+      where: { id: session.id },
+      data: {
+        teamAName: teamAName || session.teamAName,
+        teamBName: teamBName || session.teamBName
+      }
     });
-    
-    return {
-      success: true,
-      teamAName: currentState.teamAName,
-      teamBName: currentState.teamBName
-    };
-  } catch (error) {
-    console.error('Erro ao atualizar nomes das equipes:', error);
-    throw error;
   }
-}
-
-// Resetar pontuações
-async function resetScores() {
-  try {
-    // Resetar questões
-    await Question.updateMany({}, { 
-      isActive: false,
-      isFinalized: false,
-      teamAVotes: 0,
-      teamBVotes: 0
-    });
-    
-    // Apagar votos
-    await Vote.deleteMany({});
-    
-    // Resetar estado global
-    stateService.resetState();
-    
-    // Notificar clientes
-    socketService.getIO().emit('scoresReset', {
-      teamA: 0,
-      teamB: 0
-    });
-    
-    return true;
-  } catch (error) {
-    console.error('Erro ao resetar pontuações:', error);
-    throw error;
-  }
+  
+  // Notify clients
+  const io = socketService.getIO();
+  io.emit('teamNamesUpdated', {
+    teamAName: session.teamAName,
+    teamBName: session.teamBName
+  });
+  
+  return {
+    success: true,
+    teamAName: session.teamAName,
+    teamBName: session.teamBName
+  };
 }
 
 module.exports = {
   activateQuestion,
-  startVoting,
-  finalizeQuestion,
-  resetScores,
   updateTeamNames
 };
