@@ -1,39 +1,50 @@
 const express = require('express');
 const http = require('http');
-const cors = require('cors');
 const path = require('path');
-const dotenv = require('dotenv');
+const cors = require('cors');
+const config = require('./config');
+const socketService = require('./services/socketService');
+const { testConnection } = require('./services/prismaService');
+const socketMiddleware = require('./middlewares/socketMiddleware');
 
-// Inicializar configurações
-dotenv.config();
+// Routes
+const adminRoutes = require('./routes/admin');
+const questionsRoutes = require('./routes/questions');
+const sessionsRoutes = require('./routes/sessions');
 
-// Criar aplicação Express e servidor HTTP
+// Initialize app
 const app = express();
 const server = http.createServer(app);
 
-// Configurar Socket.io e exportá-lo
-const socketService = require('./services/socketService');
+// Initialize socket.io
 socketService.init(server);
 
-require('./generated/prisma');
+// Test database connection
+testConnection();
 
-// Middlewares
-app.use(cors());
+// Middleware
+app.use(cors(config.cors));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(socketMiddleware);
 
-// Compartilhar io com as rotas
-app.use(require('./middlewares/socketMiddleware'));
+// API routes
+app.use('/api/admin', adminRoutes);
+app.use('/api/questions', questionsRoutes);
+app.use('/api/sessions', sessionsRoutes);
 
-// Rotas
-app.use('/api/questions', require('./routes/questions'));
-app.use('/api/sessions', require('./routes/sessions'));
-app.use('/api/admin', require('./routes/admin'));
+// Error handling middleware
+app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
+    error: err.message || 'Internal Server Error',
+    stack: config.nodeEnv === 'development' ? err.stack : undefined
+  });
+});
 
-// Iniciar servidor
-const PORT = process.env.PORT || 5001;
-server.listen(PORT, () => {
-  console.log(`Servidor a rodar na porta ${PORT}`);
+// Start server
+server.listen(config.port, () => {
+  console.log(`Server running on port ${config.port}`);
 });
 
 module.exports = { app, server };

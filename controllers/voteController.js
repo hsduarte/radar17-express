@@ -1,4 +1,4 @@
-const Vote = require('../models/Vote');
+const { prisma } = require('../services/prismaService');
 const stateService = require('../services/stateService');
 
 async function processVote(socket, data) {
@@ -10,10 +10,18 @@ async function processVote(socket, data) {
   }
   
   try {
-    // Verificar se já votou nesta questão
-    const existingVote = await Vote.findOne({
-      questionId: currentState.activeQuestion._id,
-      clientId: data.clientId || socket.id
+    // Get the question ID (ensuring compatibility with both _id and id formats)
+    const questionId = currentState.activeQuestion._id || currentState.activeQuestion.id;
+    const clientId = data.clientId || socket.id;
+    
+    // Verificar se já votou nesta questão usando Prisma
+    const existingVote = await prisma.vote.findUnique({
+      where: {
+        questionId_clientId: {
+          questionId: questionId,
+          clientId: clientId
+        }
+      }
     });
     
     if (existingVote) {
@@ -21,24 +29,70 @@ async function processVote(socket, data) {
       return;
     }
     
-    // Registrar voto no banco de dados
-    const vote = new Vote({
-      questionId: currentState.activeQuestion._id,
-      teamVoted: data.teamVoted, // 'A' ou 'B'
-      clientId: data.clientId || socket.id
+    // Registrar voto no banco de dados usando Prisma
+    const vote = await prisma.vote.create({
+      data: {
+        questionId: questionId,
+        teamVoted: data.teamVoted, // 'A' ou 'B'
+        clientId: clientId
+      }
     });
     
-    await vote.save();
-    
     // Confirmar para o cliente que seu voto foi registrado
-    socket.emit('voteConfirmed', { questionId: currentState.activeQuestion._id });
+    socket.emit('voteConfirmed', { 
+      questionId: questionId,
+      teamVoted: data.teamVoted 
+    });
+    
+    // Update vote counts in real-time
+    const teamAVotes = await prisma.vote.count({
+      where: {
+        questionId: questionId,
+        teamVoted: 'A'
+      }
+    });
+    
+    const teamBVotes = await prisma.vote.count({
+      where: {
+        questionId: questionId,
+        teamVoted: 'B'
+      }
+    });
+    
+    // Broadcast vote update to all clients if you have access to io
+    if (socket.broadcast) {
+      socket.broadcast.emit('voteUpdate', {
+        questionId: questionId,
+        teamA: teamAVotes,
+        teamB: teamBVotes
+      });
+    }
     
   } catch (error) {
     console.error('Erro ao processar voto:', error);
-    socket.emit('error', { message: 'Erro ao processar seu voto' });
+    
+    // Check if error is due to unique constraint
+    if (error.code === 'P2002') {
+      socket.emit('error', { message: 'Você já votou nesta questão' });
+    } else {
+      socket.emit('error', { message: 'Erro ao processar seu voto' });
+    }
   }
 }
 
+// Function to check current voting state
+function checkVotingState(socket) {
+  const currentState = stateService.getCurrentState();
+  
+  // Send the current state to the client
+  socket.emit('votingState', {
+    isVotingActive: currentState.isVotingActive,
+    activeQuestion: currentState.activeQuestion,
+    waitingForQuestion: !currentState.activeQuestion
+  });
+}
+
 module.exports = {
-  processVote
+  processVote,
+  checkVotingState
 };

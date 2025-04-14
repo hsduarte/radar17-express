@@ -1,244 +1,205 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Elementos DOM
-    const questionTextEl = document.getElementById('question-text');
-    const votingStatusEl = document.getElementById('voting-status');
-    const teamAScoreEl = document.getElementById('team-a-score');
-    const teamBScoreEl = document.getElementById('team-b-score');
-    const questionResultEl = document.getElementById('question-result');
-    const teamABarEl = document.getElementById('team-a-bar');
-    const teamBBarEl = document.getElementById('team-b-bar');
-    const teamAValueEl = document.getElementById('team-a-value');
-    const teamBValueEl = document.getElementById('team-b-value');
-    const voteCountEl = document.getElementById('vote-count');
-    const qrContainerEl = document.getElementById('qr-container');
+    // Configuration constants
+    const CONFIG = {
+        ANIMATION_DURATION: 2000,
+        RESULT_ANIMATION_DURATION: 1000,
+        DEFAULT_TEAM_A_NAME: 'Equipa A',
+        DEFAULT_TEAM_B_NAME: 'Equipa B',
+        QR_CODE_SIZE: 8,
+        QR_CODE_ERROR_LEVEL: 'L'
+    };
     
-    // Configuração
-    const socket = io();
+    // DOM Elements
+    const elements = {
+        debateTitleEl: document.getElementById('debate-title'),
+        debateSubtitleEl: document.getElementById('debate-subtitle'),
+        questionTextEl: document.getElementById('question-text'),
+        votingStatusEl: document.getElementById('voting-status'),
+        teamANameEl: document.getElementById('team-a-name'),
+        teamBNameEl: document.getElementById('team-b-name'),
+        teamAScoreEl: document.getElementById('team-a-score'),
+        teamBScoreEl: document.getElementById('team-b-score'),
+        questionResultEl: document.getElementById('question-result'),
+        teamABarEl: document.getElementById('team-a-bar'),
+        teamBBarEl: document.getElementById('team-b-bar'),
+        teamAValueEl: document.getElementById('team-a-value'),
+        teamBValueEl: document.getElementById('team-b-value'),
+        voteCountEl: document.getElementById('vote-count'),
+        qrContainerEl: document.getElementById('qr-container'),
+        qrImageEl: document.getElementById('qr-image')
+    };
     
-    // Estado
-    let currentState = {
+    // Application state
+    const currentState = {
         activeQuestion: null,
         isVotingActive: false,
         teamAScore: 0,
         teamBScore: 0,
-        questionResults: {
-            teamA: 0,
-            teamB: 0
-        }
+        teamAName: CONFIG.DEFAULT_TEAM_A_NAME,
+        teamBName: CONFIG.DEFAULT_TEAM_B_NAME,
+        questionResults: null
     };
     
-    // Carregar configurações de localStorage (se houver)
-    loadSettings();
+    // Socket connection
+    const socket = io();
     
-    // Gerar QR Code
-    generateQRCode();
+    // Initialize the application
+    function init() {
+        setupSocketListeners();
+        generateQRCode();
+    }
     
-    // Socket listeners
-    socket.on('connect', () => {
-        console.log('Conectado ao servidor');
-    });
+    // Set up socket event listeners
+    function setupSocketListeners() {
+        socket.on('connect', handleSocketConnect);
+        socket.on('questionActivated', handleQuestionActivated);
+        socket.on('votingStarted', handleVotingStarted);
+        socket.on('questionFinalized', handleQuestionFinalized);
+        socket.on('teamNamesUpdated', handleTeamNamesUpdated);
+        socket.on('error', handleError);
+    }
     
-    socket.on('disconnect', () => {
-        console.log('Desconectado do servidor');
-        votingStatusEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning"></i> Desconectado do servidor';
-    });
+    // Socket event handlers
+    function handleSocketConnect() {
+        console.log('Connected to server');
+    }
     
-    socket.on('currentState', (state) => {
-        console.log('Estado atual recebido:', state);
-        currentState.teamAScore = state.teamAScore;
-        currentState.teamBScore = state.teamBScore;
-        currentState.activeQuestion = state.activeQuestion;
-        currentState.isVotingActive = state.isVotingActive;
-        
-        updateDisplay();
-    });
-    
-    socket.on('questionActivated', (data) => {
+    function handleQuestionActivated(data) {
         console.log('Questão ativada:', data);
         currentState.activeQuestion = data.question;
         currentState.isVotingActive = data.isVotingActive;
         
-        // Esconder resultado da questão anterior
-        questionResultEl.classList.add('hidden');
+        // Hide previous question result
+        elements.questionResultEl.classList.add('hidden');
         
-        // Restaurar opacidade normal do QR code
-        qrContainerEl.classList.remove('opacity-70');
+        // Restore normal QR code opacity
+        elements.qrContainerEl.classList.remove('opacity-70');
         
-        // Atualizar display
+        // Update display
         updateDisplay();
         
-        // Animar
-        questionTextEl.classList.add('animate-pulse-custom');
-        setTimeout(() => {
-            questionTextEl.classList.remove('animate-pulse-custom');
-        }, 2000);
-    });
+        // Animate question text
+        animateElement(elements.questionTextEl, 'animate-pulse-custom', CONFIG.ANIMATION_DURATION);
+    }
     
-    socket.on('votingStarted', (data) => {
+    function handleVotingStarted(data) {
         console.log('Votação iniciada:', data);
         currentState.isVotingActive = true;
         
         updateDisplay();
-    });
+    }
     
-    socket.on('questionFinalized', (data) => {
+    function handleQuestionFinalized(data) {
         console.log('Questão finalizada:', data);
         currentState.isVotingActive = false;
         currentState.teamAScore = data.totalScores.teamA;
         currentState.teamBScore = data.totalScores.teamB;
         currentState.questionResults = data.results;
         
-        // Atualizar display
+        // Update display
         updateDisplay();
         
-        // Mostrar resultado da questão
+        // Show question result
         showQuestionResult(data.results);
         
-        // Animar pontuações
-        teamAScoreEl.classList.add('animate-score-change');
-        teamBScoreEl.classList.add('animate-score-change');
-        setTimeout(() => {
-            teamAScoreEl.classList.remove('animate-score-change');
-            teamBScoreEl.classList.remove('animate-score-change');
-        }, 1000);
+        // Animate scores
+        animateElement(elements.teamAScoreEl, 'animate-score-change', CONFIG.RESULT_ANIMATION_DURATION);
+        animateElement(elements.teamBScoreEl, 'animate-score-change', CONFIG.RESULT_ANIMATION_DURATION);
         
-        // Tornar QR code semi-transparente quando os resultados aparecem
-        qrContainerEl.classList.add('opacity-70');
-    });
+        // Make QR code semi-transparent when results appear
+        elements.qrContainerEl.classList.add('opacity-70');
+    }
     
-    socket.on('scoresReset', (data) => {
-        console.log('Pontuações resetadas:', data);
-        currentState.teamAScore = data.teamA;
-        currentState.teamBScore = data.teamB;
-        
-        updateDisplay();
-    });
-    
-    socket.on('teamNamesUpdated', (data) => {
-        console.log('Nomes das equipas atualizados:', data);
-        
-        // Atualizar nomes das equipas no visualizador
-        const teamANameEl = document.getElementById('team-a-name');
-        const teamBNameEl = document.getElementById('team-b-name');
-        
-        if (teamANameEl && data.teamAName) {
-            teamANameEl.textContent = data.teamAName;
+    function handleTeamNamesUpdated(data) {
+        console.log('Team names updated:', data);
+        if (data.teamAName) {
+            currentState.teamAName = data.teamAName;
+        }
+        if (data.teamBName) {
+            currentState.teamBName = data.teamBName;
         }
         
-        if (teamBNameEl && data.teamBName) {
-            teamBNameEl.textContent = data.teamBName;
-        }
-    });
+        updateTeamNames();
+    }
     
-    // Funções
+    function handleError(data) {
+        console.error('Error from server:', data);
+    }
+    
+    // Helper functions
     function updateDisplay() {
-        // Atualizar pontuações
-        teamAScoreEl.textContent = currentState.teamAScore;
-        teamBScoreEl.textContent = currentState.teamBScore;
-        
-        // Atualizar questão ativa
         if (currentState.activeQuestion) {
-            questionTextEl.textContent = currentState.activeQuestion.text;
+            elements.questionTextEl.textContent = currentState.activeQuestion.text;
             
             if (currentState.isVotingActive) {
-                votingStatusEl.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> Votação aberta - Vote agora!';
-                votingStatusEl.classList.add('animate-pulse-custom');
+                elements.votingStatusEl.innerHTML = '<i class="bi bi-check-circle-fill"></i> Votação em andamento';
+            } else if (currentState.questionResults) {
+                elements.votingStatusEl.innerHTML = '<i class="bi bi-flag-fill"></i> Votação encerrada';
             } else {
-                votingStatusEl.innerHTML = '<i class="bi bi-pause-circle-fill"></i> Aguardando início da votação';
-                votingStatusEl.classList.remove('animate-pulse-custom');
+                elements.votingStatusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> Aguardando início da votação';
             }
         } else {
-            questionTextEl.textContent = 'Aguardando próxima questão';
-            votingStatusEl.innerHTML = '<i class="bi bi-hourglass"></i> Em breve';
-            votingStatusEl.classList.remove('animate-pulse-custom');
+            elements.questionTextEl.textContent = 'Aguardando início do debate...';
+            elements.votingStatusEl.innerHTML = '<i class="bi bi-hourglass"></i> Preparando questões';
         }
+        
+        // Update team names
+        updateTeamNames();
+        
+        // Update scores
+        elements.teamAScoreEl.textContent = currentState.teamAScore;
+        elements.teamBScoreEl.textContent = currentState.teamBScore;
+    }
+    
+    function updateTeamNames() {
+        elements.teamANameEl.textContent = currentState.teamAName;
+        elements.teamBNameEl.textContent = currentState.teamBName;
     }
     
     function showQuestionResult(results) {
-        const teamAVotes = results.teamA || 0;
-        const teamBVotes = results.teamB || 0;
-        const totalVotes = teamAVotes + teamBVotes;
+        if (!results) return;
         
-        // Calcular percentagens
-        let teamAPercent = 50;
-        let teamBPercent = 50;
+        const totalVotes = results.teamA + results.teamB;
+        const teamAPercentage = totalVotes > 0 ? Math.round((results.teamA / totalVotes) * 100) : 50;
+        const teamBPercentage = totalVotes > 0 ? Math.round((results.teamB / totalVotes) * 100) : 50;
         
-        if (totalVotes > 0) {
-            teamAPercent = Math.round((teamAVotes / totalVotes) * 100);
-            teamBPercent = 100 - teamAPercent;
-        }
+        // Update result bar widths
+        elements.teamABarEl.style.width = `${teamAPercentage}%`;
+        elements.teamBBarEl.style.width = `${teamBPercentage}%`;
         
-        // Atualizar barras e valores
-        teamAValueEl.textContent = `${teamAVotes} (${teamAPercent}%)`;
-        teamBValueEl.textContent = `${teamBVotes} (${teamBPercent}%)`;
+        // Update percentage values
+        elements.teamAValueEl.textContent = `${teamAPercentage}%`;
+        elements.teamBValueEl.textContent = `${teamBPercentage}%`;
         
-        // Animar barras
-        teamABarEl.style.width = '0%';
-        teamBBarEl.style.width = '0%';
+        // Update vote count
+        elements.voteCountEl.textContent = `Total de votos: ${totalVotes}`;
         
-        // Forçar um reflow para garantir que a animação funcione
-        void teamABarEl.offsetWidth;
-        void teamBBarEl.offsetWidth;
-        
-        // Definir novas larguras com animação
-        teamABarEl.style.width = `${teamAPercent}%`;
-        teamBBarEl.style.width = `${teamBPercent}%`;
-        
-        // Atualizar contador de votos
-        voteCountEl.textContent = `Total de votos: ${totalVotes}`;
-        
-        // Mostrar resultado
-        questionResultEl.classList.remove('hidden');
-        
-        // Atualizar status da votação
-        votingStatusEl.innerHTML = '<i class="bi bi-check-circle-fill"></i> Votação encerrada - Resultados:';
-        votingStatusEl.classList.remove('animate-pulse-custom');
-    }
-    
-    function loadSettings() {
-        try {
-            const settingsStr = localStorage.getItem('radar17-settings');
-            if (settingsStr) {
-                const settings = JSON.parse(settingsStr);
-                
-                // Atualizar nomes das equipas
-                if (settings.teamAName) {
-                    document.getElementById('team-a-name').textContent = settings.teamAName;
-                }
-                
-                if (settings.teamBName) {
-                    document.getElementById('team-b-name').textContent = settings.teamBName;
-                }
-                
-                // Atualizar título e subtítulo
-                if (settings.debateTitle) {
-                    document.getElementById('debate-title').textContent = settings.debateTitle;
-                }
-                
-                if (settings.debateSubtitle) {
-                    document.getElementById('debate-subtitle').textContent = settings.debateSubtitle;
-                }
-            }
-        } catch (error) {
-            console.error('Erro ao carregar configurações:', error);
-        }
+        // Show result container
+        elements.questionResultEl.classList.remove('hidden');
     }
     
     function generateQRCode() {
         try {
-            // Obter a URL atual e remover a parte "visualizer"
-            const baseUrl = window.location.href.replace('/visualizer', '');
+            const qrCode = qrcode(CONFIG.QR_CODE_SIZE, CONFIG.QR_CODE_ERROR_LEVEL);
+            const currentUrl = window.location.origin;
+            qrCode.addData(currentUrl);
+            qrCode.make();
             
-            // Criar QR Code com a URL base
-            const qr = qrcode(0, 'M');
-            qr.addData(baseUrl);
-            qr.make();
-            
-            // Substituir a imagem placeholder pelo QR Code gerado
-            const qrCodeEl = document.querySelector('.qr-code');
-            qrCodeEl.innerHTML = qr.createImgTag(4);
+            const qrImageSrc = qrCode.createDataURL();
+            elements.qrImageEl.src = qrImageSrc;
         } catch (error) {
-            console.error('Erro ao gerar QR Code:', error);
+            console.error('Error generating QR code:', error);
+            // Fallback - keep the placeholder image
         }
     }
+    
+    function animateElement(element, animationClass, duration) {
+        element.classList.add(animationClass);
+        setTimeout(() => {
+            element.classList.remove(animationClass);
+        }, duration);
+    }
+    
+    // Initialize the application
+    init();
 }); 

@@ -1,4 +1,4 @@
-const prisma = require('../services/prismaService');
+const { prisma } = require('../services/prismaService');
 const socketService = require('../services/socketService');
 const stateService = require('../services/stateService');
 

@@ -3,13 +3,16 @@ FROM node:18-slim AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and prisma schema
 COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install dependencies including PostgreSQL client (for health checks)
 RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
 RUN npm ci
+
+# Create the generated directory
+RUN mkdir -p ./generated
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -31,9 +34,11 @@ RUN apt-get update && apt-get install -y postgresql-client wget && rm -rf /var/l
 # Copy from builder stage
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/generated ./generated
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/*.js ./
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy the entrypoint script
 COPY ./docker-entrypoint.sh /

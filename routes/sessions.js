@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const prisma = require('../services/prismaService');
+const { prisma } = require('../services/prismaService');
 
 // Get all sessions
 router.get('/', async (req, res) => {

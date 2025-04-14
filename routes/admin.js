@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
-const prisma = require('../services/prismaService');
+const { prisma } = require('../services/prismaService');
 const socketService = require('../services/socketService');
 const stateService = require('../services/stateService');
+const { handleApiError } = require('../utilities/errorHandler');
 
 // Activate question
 router.post('/activate-question', async (req, res) => {
@@ -30,35 +31,29 @@ router.post('/start-voting', async (req, res) => {
   try {
     const { questionId } = req.body;
     
-    // Make sure questionId is provided
-    if (!questionId) {
-      return res.status(400).json({ error: 'ID da questão é obrigatório' });
-    }
-    
-    // Verify question exists and is active
+    // Verify question exists
     const question = await prisma.question.findUnique({
       where: { id: questionId }
     });
     
     if (!question) {
-      return res.status(400).json({ error: 'Questão não encontrada' });
-    }
-    
-    if (!question.isActive) {
-      return res.status(400).json({ error: 'Questão não está ativa' });
+      return res.status(404).json({ error: 'Question not found' });
     }
     
     // Update state
     stateService.setVotingActive(true);
+    stateService.setActiveQuestion(question);
     
     // Notify clients
     const io = socketService.getIO();
-    io.emit('votingStarted', { questionId });
+    io.emit('questionActivated', {
+      question,
+      isVotingActive: true
+    });
     
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Error starting voting:', error);
-    res.status(400).json({ error: error.message });
+    handleApiError(res, error, 'Error starting voting');
   }
 });
 

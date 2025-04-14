@@ -9,9 +9,12 @@ until pg_isready -h postgres -p 5432 -U postgres; do
 done
 echo "PostgreSQL is up and running!"
 
+# Create the generated directory if it doesn't exist
+mkdir -p ./generated
+
 # Generate Prisma client
 echo "Generating Prisma client..."
-npx prisma generate
+npx prisma generate --schema=./prisma/schema.prisma
 
 # Run Prisma migrations
 echo "Running Prisma migrations..."

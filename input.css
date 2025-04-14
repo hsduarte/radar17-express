@@ -2,7 +2,105 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom styles can go here */
+/* Base styles */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply font-sans antialiased;
+  }
+}
+
+/* Custom animations */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+    70% { box-shadow: 0 0 0 20px rgba(255, 255, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
+@keyframes pulse-basic {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes score-change {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(5px); }
+    50% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+    100% { transform: translateX(0); }
+}
+
+/* Custom animation classes */
+.animate-spin {
+    animation: spin 2s linear infinite;
+}
+
+.animate-pulse {
+    animation: pulse-basic 2s infinite;
+}
+
+.animate-pulse-custom {
+    animation: pulse 2s infinite;
+}
+
+.animate-score-change {
+    animation: score-change 1s ease-out;
+}
+
+.animate-shake, .shake {
+    animation: shake 0.5s;
+}
+
+/* Custom team colors */
+.text-teamA {
+    @apply text-blue-600;
+}
+
+.text-teamB {
+    @apply text-red-600;
+}
+
+.border-teamA {
+    @apply border-blue-600;
+}
+
+.border-teamB {
+    @apply border-red-600;
+}
+
+.bg-teamA {
+    @apply bg-blue-600;
+}
+
+.bg-teamB {
+    @apply bg-red-600;
+}
+
+/* Custom utility classes */
+@layer utilities {
+  .text-shadow {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+  }
+  
+  .transition-standard {
+    @apply transition-all duration-300 ease-in-out;
+  }
+}
 
 @layer components {
     /* Visualizador de Debate - Layout */
@@ -87,7 +185,6 @@
     
     .result-value {
         @apply absolute top-1/2 transform -translate-y-1/2 font-bold text-white;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
     }
     
     .team-a-value {
@@ -126,33 +223,6 @@
     
     .score-animation {
         @apply transition-transform duration-1000;
-        animation: score-change 1s ease-out;
-    }
-    
-    @keyframes score-change {
-        0% {
-            transform: scale(1);
-        }
-        50% {
-            transform: scale(1.2);
-        }
-        100% {
-            transform: scale(1);
-        }
-    }
-    
-    /* Página de Votação */
-    /* Animações para a página de votação */
-    .shake {
-        animation: shake 0.5s;
-    }
-    
-    @keyframes shake {
-        0% { transform: translateX(0); }
-        25% { transform: translateX(5px); }
-        50% { transform: translateX(-5px); }
-        75% { transform: translateX(5px); }
-        100% { transform: translateX(0); }
     }
     
     /* Status message styling */

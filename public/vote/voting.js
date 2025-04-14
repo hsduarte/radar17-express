@@ -1,343 +1,267 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Elementos DOM
-    const questionTextEl = document.getElementById('question-text');
-    const voteTeamA = document.getElementById('vote-team-a');
-    const voteTeamB = document.getElementById('vote-team-b');
-    const teamATextEl = document.getElementById('team-a-text');
-    const teamBTextEl = document.getElementById('team-b-text');
-    const statusIconEl = document.getElementById('status-icon');
-    const statusTextEl = document.getElementById('status-text');
-    const activeContainerEl = document.getElementById('active-container');
-    const waitingContainerEl = document.getElementById('waiting-container');
-    const debateTitleEl = document.getElementById('debate-title');
-    const debateSubtitleEl = document.getElementById('debate-subtitle');
+    // Configuration constants
+    const CONFIG = {
+        ANIMATION_DURATION: 500,
+        LOCAL_STORAGE_KEY: 'votes'
+    };
     
-    // Estado
-    let currentQuestion = null;
-    let isVotingActive = false;
-    let hasVoted = false;
-    let clientId = null;
+    // DOM Elements
+    const elements = {
+        debateTitleEl: document.getElementById('debate-title'),
+        debateSubtitleEl: document.getElementById('debate-subtitle'),
+        questionTextEl: document.getElementById('question-text'),
+        voteTeamA: document.getElementById('vote-team-a'),
+        voteTeamB: document.getElementById('vote-team-b'),
+        teamATextEl: document.getElementById('team-a-text'),
+        teamBTextEl: document.getElementById('team-b-text'),
+        statusIconEl: document.getElementById('status-icon'),
+        statusTextEl: document.getElementById('status-text'),
+        activeContainerEl: document.getElementById('active-container'),
+        waitingContainerEl: document.getElementById('waiting-container')
+    };
     
-    // Configuração
+    // Application state
+    const state = {
+        clientId: generateClientId(),
+        currentQuestion: null,
+        isVotingActive: false,
+        hasVoted: false,
+        teamAName: 'Equipa A',
+        teamBName: 'Equipa B',
+        votedQuestions: loadVotedQuestions()
+    };
+    
+    // Socket connection
     const socket = io();
     
-    // Carregar configurações locais (se houver)
-    loadSettings();
+    // Initialize the application
+    function init() {
+        setupSocketListeners();
+        setupEventListeners();
+    }
     
-    // Inicializar ID de cliente
-    initClientId();
-    
-    // Socket listeners
-    socket.on('connect', () => {
-        console.log('Conectado ao servidor');
-        updateStatus('Conectado! Aguardando questão...', 'success', 'check-circle-fill');
-    });
-    
-    socket.on('disconnect', () => {
-        console.log('Desconectado do servidor');
-        updateStatus('Desconectado do servidor. Tentando reconectar...', 'danger', 'wifi-off');
-        disableVoting();
-    });
-    
-    // Receber o estado atual ao conectar
-    socket.on('currentState', (state) => {
-        console.log('Estado atual recebido:', state);
+    // Set up socket event listeners
+    function setupSocketListeners() {
+        socket.on('connect', handleSocketConnect);
+        socket.on('questionActivated', handleQuestionActivated);
+        socket.on('votingStarted', handleVotingStarted);
+        socket.on('questionFinalized', handleQuestionFinalized);
+        socket.on('teamNamesUpdated', handleTeamNamesUpdated);
+        socket.on('connect_error', handleConnectionError);
+        socket.on('disconnect', handleDisconnect);
         
-        if (state.activeQuestion && state.isVotingActive) {
-            currentQuestion = state.activeQuestion;
-            isVotingActive = state.isVotingActive;
+        // Add listener for votingState response
+        socket.on('votingState', handleVotingState);
+        socket.on('voteConfirmed', handleVoteConfirmed);
+        socket.on('error', handleError);
+    }
+    
+    // Set up UI event listeners
+    function setupEventListeners() {
+        elements.voteTeamA.addEventListener('click', () => handleVote('teamA'));
+        elements.voteTeamB.addEventListener('click', () => handleVote('teamB'));
+    }
+    
+    // Socket event handlers
+    function handleSocketConnect() {
+        console.log('Connected to server with client ID:', state.clientId);
+        updateStatus('success', 'Conectado ao servidor');
+        
+        // Send client ID to server
+        socket.emit('clientConnected', { clientId: state.clientId });
+        
+        // Request current voting state when connecting
+        socket.emit('checkVotingState');
+    }
+    
+    function handleQuestionActivated(data) {
+        console.log('Question activated:', data);
+        state.currentQuestion = data.question;
+        state.isVotingActive = data.isVotingActive;
+        state.hasVoted = hasVotedForQuestion(state.currentQuestion.id);
+        
+        updateUI();
+    }
+    
+    function handleVotingStarted(data) {
+        console.log('Voting started:', data);
+        state.isVotingActive = true;
+        updateUI();
+    }
+    
+    function handleQuestionFinalized(data) {
+        console.log('Question finalized:', data);
+        state.isVotingActive = false;
+        updateUI();
+    }
+    
+    function handleTeamNamesUpdated(data) {
+        console.log('Team names updated:', data);
+        if (data.teamAName) state.teamAName = data.teamAName;
+        if (data.teamBName) state.teamBName = data.teamBName;
+        
+        elements.teamATextEl.textContent = state.teamAName;
+        elements.teamBTextEl.textContent = state.teamBName;
+    }
+    
+    function handleConnectionError(error) {
+        console.error('Connection error:', error);
+        updateStatus('danger', 'Erro de conexão. Tentando reconectar...');
+    }
+    
+    function handleDisconnect(reason) {
+        console.log('Disconnected:', reason);
+        updateStatus('warning', 'Desconectado. Tentando reconectar...');
+    }
+    
+    // Add handler for votingState response
+    function handleVotingState(data) {
+        state.isVotingActive = data.isVotingActive;
+        
+        // Make sure we set currentQuestion to null if there's no active question
+        state.currentQuestion = data.activeQuestion || null;
+        
+        if (state.currentQuestion) {
+            state.hasVoted = hasVotedForQuestion(state.currentQuestion.id || state.currentQuestion._id);
+        }
+        
+        updateUI();
+    }
+    
+    // Add handler for vote confirmation
+    function handleVoteConfirmed(data) {
+        console.log('Vote confirmed:', data);
+        if (data.questionId) {
+            saveVotedQuestion(data.questionId);
+            state.hasVoted = true;
+            updateStatus('success', 'Voto registrado com sucesso!');
+            updateUI();
+        }
+    }
+    
+    // Add handler for errors
+    function handleError(data) {
+        console.error('Error from server:', data);
+        updateStatus('danger', data.message || 'Erro ao processar operação');
+    }
+    
+    // UI event handlers
+    function handleVote(team) {
+        if (!state.isVotingActive || state.hasVoted || !state.currentQuestion) return;
+        
+        // Animate button
+        const buttonElement = team === 'teamA' ? elements.voteTeamA : elements.voteTeamB;
+        animateButton(buttonElement);
+        
+        // Get question ID (handling both id and _id formats)
+        const questionId = state.currentQuestion.id || state.currentQuestion._id;
+        
+        // Send vote to server - update to match the expected format in controller
+        socket.emit('submitVote', {
+            clientId: state.clientId,
+            questionId: questionId,
+            teamVoted: team === 'teamA' ? 'A' : 'B'
+        });
+        
+        // Show pending status
+        updateStatus('info', 'Enviando seu voto...');
+    }
+    
+    // Helper functions
+    function updateUI() {
+        if (state.currentQuestion) {
+            // We have an active question, show the active container
+            elements.activeContainerEl.classList.remove('hidden');
+            elements.waitingContainerEl.classList.add('hidden');
             
-            // Atualizar a questão
-            questionTextEl.textContent = state.activeQuestion.text;
+            elements.questionTextEl.textContent = state.currentQuestion.text;
+            elements.teamATextEl.textContent = state.teamAName;
+            elements.teamBTextEl.textContent = state.teamBName;
             
-            // Verificar se já votou nesta questão
-            checkIfVoted();
+            const buttonsEnabled = state.isVotingActive && !state.hasVoted;
+            elements.voteTeamA.disabled = !buttonsEnabled;
+            elements.voteTeamB.disabled = !buttonsEnabled;
             
-            // Mostrar container de questão ativa
-            activeContainerEl.classList.remove('hidden');
-            waitingContainerEl.classList.add('hidden');
-            
-            // Habilitar votação se não votou
-            if (!hasVoted && isVotingActive) {
-                enableVoting();
+            if (state.hasVoted) {
+                updateStatus('info', 'Você já votou nesta questão');
+            } else if (state.isVotingActive) {
+                updateStatus('success', 'Votação aberta! Escolha uma opção');
+            } else {
+                updateStatus('warning', 'Aguardando início da votação');
             }
-        } else if (state.activeQuestion) {
-            // Questão ativa, mas votação não está aberta
-            currentQuestion = state.activeQuestion;
-            isVotingActive = false;
-            
-            // Atualizar a questão
-            questionTextEl.textContent = state.activeQuestion.text;
-            
-            // Mostrar container de questão ativa
-            activeContainerEl.classList.remove('hidden');
-            waitingContainerEl.classList.add('hidden');
-            
-            // Desabilitar votação
-            disableVoting();
-            updateStatus('Aguardando abertura da votação...', 'warning', 'hourglass-split');
         } else {
-            // Nenhuma questão ativa
-            currentQuestion = null;
-            isVotingActive = false;
-            
-            // Mostrar container de espera
-            activeContainerEl.classList.add('hidden');
-            waitingContainerEl.classList.remove('hidden');
+            // No active question, show the waiting container
+            elements.activeContainerEl.classList.add('hidden');
+            elements.waitingContainerEl.classList.remove('hidden');
         }
-    });
+    }
     
-    // Quando uma nova questão é ativada
-    socket.on('questionActivated', (data) => {
-        console.log('Nova questão ativada:', data);
-        currentQuestion = data.question;
-        isVotingActive = data.isVotingActive;
+    function updateStatus(type, message) {
+        // Remove all status classes
+        elements.statusTextEl.classList.remove('bg-blue-100', 'text-blue-800', 'bg-green-100', 'text-green-700', 'bg-yellow-100', 'text-yellow-700', 'bg-red-100', 'text-red-700');
         
-        // Atualizar a questão
-        questionTextEl.textContent = data.question.text;
-        
-        // Resetar estado de votação
-        hasVoted = false;
-        
-        // Mostrar container de questão ativa
-        activeContainerEl.classList.remove('hidden');
-        waitingContainerEl.classList.add('hidden');
-        
-        if (isVotingActive) {
-            enableVoting();
-            updateStatus('Nova questão! Vote agora!', 'success', 'check-circle-fill pulse');
-        } else {
-            disableVoting();
-            updateStatus('Nova questão! Aguardando abertura da votação...', 'warning', 'hourglass-split');
+        // Update icon
+        let iconClass = '';
+        switch (type) {
+            case 'success':
+                elements.statusTextEl.classList.add('bg-green-100', 'text-green-700');
+                iconClass = 'bi-check-circle-fill';
+                break;
+            case 'warning':
+                elements.statusTextEl.classList.add('bg-yellow-100', 'text-yellow-700');
+                iconClass = 'bi-exclamation-triangle-fill';
+                break;
+            case 'danger':
+                elements.statusTextEl.classList.add('bg-red-100', 'text-red-700');
+                iconClass = 'bi-x-circle-fill';
+                break;
+            case 'info':
+            default:
+                elements.statusTextEl.classList.add('bg-blue-100', 'text-blue-800');
+                iconClass = 'bi-info-circle-fill';
+                break;
         }
         
-        // Animar aparecimento da questão
-        questionTextEl.classList.add('animate-shake');
+        elements.statusIconEl.innerHTML = `<i class="bi ${iconClass}"></i>`;
+        elements.statusTextEl.textContent = message;
+    }
+    
+    function animateButton(button) {
+        button.classList.add('animate-pulse');
         setTimeout(() => {
-            questionTextEl.classList.remove('animate-shake');
-        }, 500);
-    });
-    
-    // Quando a votação é iniciada
-    socket.on('votingStarted', (data) => {
-        console.log('Votação iniciada:', data);
-        isVotingActive = true;
-        
-        if (currentQuestion && !hasVoted) {
-            enableVoting();
-            updateStatus('Votação aberta! Escolha uma equipa!', 'success', 'check-circle-fill pulse');
-        }
-    });
-    
-    // Quando a votação é finalizada
-    socket.on('questionFinalized', (data) => {
-        console.log('Questão finalizada:', data);
-        isVotingActive = false;
-        disableVoting();
-        
-        if (hasVoted) {
-            updateStatus('Votação encerrada. Seu voto foi registrado!', 'success', 'check-circle-fill');
-        } else {
-            updateStatus('Votação encerrada. Você não votou nesta questão.', 'warning', 'exclamation-triangle-fill');
-        }
-        
-        // Aguardar próxima questão após 5 segundos
-        setTimeout(() => {
-            if (!isVotingActive && !currentQuestion) {
-                activeContainerEl.classList.add('hidden');
-                waitingContainerEl.classList.remove('hidden');
-            }
-        }, 5000);
-    });
-    
-    // Confirmação de voto
-    socket.on('voteConfirmed', (data) => {
-        console.log('Voto confirmado:', data);
-        
-        if (currentQuestion && currentQuestion._id === data.questionId) {
-            hasVoted = true;
-            
-            // Salvar informação de voto
-            localStorage.setItem(`voted_${currentQuestion._id}`, 'true');
-            
-            disableVoting();
-            updateStatus('Seu voto foi registrado! Aguardando resultado...', 'success', 'check-circle-fill');
-        }
-    });
-    
-    // Mensagens de erro
-    socket.on('error', (data) => {
-        console.error('Erro:', data);
-        updateStatus(`Erro: ${data.message}`, 'danger', 'exclamation-triangle-fill');
-    });
-
-    // Atualização dos nomes das equipes
-    socket.on('teamNamesUpdated', (data) => {
-        console.log('Votação: nomes das equipas atualizados:', data);
-        
-        // Atualizar diretamente os elementos com ID específico
-        if (teamATextEl && data.teamAName) {
-            teamATextEl.textContent = data.teamAName;
-        }
-        
-        if (teamBTextEl && data.teamBName) {
-            teamBTextEl.textContent = data.teamBName;
-        }
-        
-        // Atualizar título da página
-        document.title = `Votação: ${data.teamAName} vs ${data.teamBName}`;
-    });
-    
-    // Event listeners para botões de votação
-    voteTeamA.addEventListener('click', () => {
-        if (currentQuestion && isVotingActive && !hasVoted) {
-            submitVote('A');
-            voteTeamA.classList.add('opacity-60', 'cursor-not-allowed');
-            voteTeamB.classList.add('opacity-60', 'cursor-not-allowed');
-            updateStatus('Enviando seu voto...', 'info', 'arrow-repeat spinner');
-        }
-    });
-    
-    voteTeamB.addEventListener('click', () => {
-        if (currentQuestion && isVotingActive && !hasVoted) {
-            submitVote('B');
-            voteTeamA.classList.add('opacity-60', 'cursor-not-allowed');
-            voteTeamB.classList.add('opacity-60', 'cursor-not-allowed');
-            updateStatus('Enviando seu voto...', 'info', 'arrow-repeat spinner');
-        }
-    });
-    
-    // Funções auxiliares
-    function submitVote(team) {
-        socket.emit('submitVote', { 
-            teamVoted: team, 
-            questionId: currentQuestion._id,
-            clientId: clientId
-        });
+            button.classList.remove('animate-pulse');
+        }, CONFIG.ANIMATION_DURATION);
     }
     
-    function enableVoting() {
-        if (!hasVoted && isVotingActive) {
-            voteTeamA.disabled = false;
-            voteTeamB.disabled = false;
-            voteTeamA.classList.remove('opacity-60', 'cursor-not-allowed');
-            voteTeamB.classList.remove('opacity-60', 'cursor-not-allowed');
+    function generateClientId() {
+        // Check if client ID already exists in localStorage
+        const existingId = localStorage.getItem('clientId');
+        if (existingId) return existingId;
+        
+        // Generate a new client ID
+        const newId = 'client_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('clientId', newId);
+        return newId;
+    }
+    
+    function loadVotedQuestions() {
+        const votedString = localStorage.getItem(CONFIG.LOCAL_STORAGE_KEY);
+        return votedString ? JSON.parse(votedString) : [];
+    }
+    
+    function saveVotedQuestion(questionId) {
+        const voted = loadVotedQuestions();
+        if (!voted.includes(questionId)) {
+            voted.push(questionId);
+            localStorage.setItem(CONFIG.LOCAL_STORAGE_KEY, JSON.stringify(voted));
+            state.votedQuestions = voted;
         }
     }
     
-    function disableVoting() {
-        voteTeamA.disabled = true;
-        voteTeamB.disabled = true;
+    function hasVotedForQuestion(questionId) {
+        return state.votedQuestions.includes(questionId);
     }
     
-    function updateStatus(message, type, icon) {
-        // Mapear tipos de alerta para classes Tailwind
-        const alertClasses = {
-            'success': 'bg-green-100 text-green-800',
-            'warning': 'bg-yellow-100 text-yellow-800',
-            'danger': 'bg-red-100 text-red-800',
-            'info': 'bg-blue-100 text-blue-800'
-        };
-        
-        // Remover todas as classes de alerta e adicionar a nova
-        statusTextEl.className = '';
-        statusTextEl.classList.add('p-3', 'rounded-md', ...alertClasses[type].split(' '));
-        statusTextEl.textContent = message;
-        
-        // Atualizar ícone
-        statusIconEl.innerHTML = `<i class="bi bi-${icon}"></i>`;
-        
-        // Adicionar animações se necessário
-        const iconEl = statusIconEl.querySelector('i');
-        iconEl.classList.remove('animate-spin', 'animate-pulse');
-        
-        if (icon.includes('spinner') || icon === 'arrow-repeat') {
-            iconEl.classList.add('animate-spin');
-        } else if (icon.includes('pulse')) {
-            iconEl.classList.add('animate-pulse');
-        }
-    }
-    
-    function checkIfVoted() {
-        if (currentQuestion) {
-            const votedFlag = localStorage.getItem(`voted_${currentQuestion._id}`);
-            hasVoted = votedFlag === 'true';
-            
-            if (hasVoted) {
-                disableVoting();
-                updateStatus('Você já votou nesta questão!', 'info', 'check-square-fill');
-            }
-        }
-    }
-    
-    function initClientId() {
-        // Verificar se já existe um ID de cliente
-        clientId = localStorage.getItem('clientId');
-        
-        // Se não existir, criar um novo
-        if (!clientId) {
-            clientId = generateUUID();
-            localStorage.setItem('clientId', clientId);
-        }
-        
-        console.log('ID do cliente:', clientId);
-    }
-    
-    function generateUUID() {
-        // Implementação simples de UUID
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            const r = Math.random() * 16 | 0, 
-                v = c == 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
-    }
-    
-    function loadSettings() {
-        try {
-            const settingsStr = localStorage.getItem('radar17-settings');
-            if (settingsStr) {
-                const settings = JSON.parse(settingsStr);
-                
-                // Atualizar nomes das equipas
-                if (settings.teamAName) {
-                    teamATextEl.textContent = settings.teamAName;
-                }
-                
-                if (settings.teamBName) {
-                    teamBTextEl.textContent = settings.teamBName;
-                }
-                
-                // Atualizar título e subtítulo
-                if (settings.debateTitle) {
-                    debateTitleEl.textContent = settings.debateTitle;
-                }
-                
-                if (settings.debateSubtitle) {
-                    debateSubtitleEl.textContent = settings.debateSubtitle;
-                }
-            }
-        } catch (error) {
-            console.error('Erro ao carregar configurações:', error);
-        }
-    }
-
-    // Update the socket event listeners in your main.js file for the voting page
-    socket.on('votingEnded', (data) => {
-        console.log('Voting ended:', data);
-        isVotingActive = false;
-        
-        // Update UI to show voting has ended
-        const statusEl = document.getElementById('voting-status');
-        if (statusEl) {
-            statusEl.className = 'bg-red-100 text-red-800 p-4 rounded-lg mb-4';
-            statusEl.innerHTML = '<i class="bi bi-x-circle-fill mr-2"></i> Votação encerrada. Aguarde a próxima questão.';
-        }
-        
-        // Disable voting buttons
-        const voteButtons = document.querySelectorAll('.vote-btn');
-        voteButtons.forEach(btn => {
-            btn.disabled = true;
-            btn.classList.add('opacity-50', 'cursor-not-allowed');
-        });
-    });
+    // Initialize the application
+    init();
 });
