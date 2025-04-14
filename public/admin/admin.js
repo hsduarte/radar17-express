@@ -192,10 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         <div class="flex space-x-1">
                             ${!question.isFinalized ? 
-                                `<button class="p-3 text-blue-600 hover:bg-blue-50 rounded activate-btn" data-id="${question._id}">
-                                    <i class="bi bi-check-circle"></i>
-                                </button>
-                                <button class="p-3 text-yellow-600 hover:bg-gray-50 rounded edit-btn" data-id="${question._id}">
+                                `<button class="p-3 text-yellow-600 hover:bg-gray-50 rounded edit-btn" data-id="${question._id}">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <button class="p-3 text-red-600 hover:bg-red-50 rounded delete-btn" data-id="${question._id}">
@@ -211,12 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             
             questionsListEl.appendChild(questionEl);
-            
-            // Adicionar event listeners
-            const activateBtn = questionEl.querySelector('.activate-btn');
-            if (activateBtn) {
-                activateBtn.addEventListener('click', () => activateQuestion(question._id));
-            }
             
             const deleteBtn = questionEl.querySelector('.delete-btn');
             if (deleteBtn) {
@@ -444,6 +435,34 @@ document.addEventListener('DOMContentLoaded', () => {
             
             updateScoreDisplay();
             updateActiveQuestionDisplay();
+        });
+        
+        socket.on('teamNamesUpdated', (data) => {
+            console.log('Nomes das equipas atualizados:', data);
+            
+            // Atualizar nomes das equipas no painel administrativo
+            const teamANameEl = document.querySelector('#current-scores .text-blue-600');
+            const teamBNameEl = document.querySelector('#current-scores .text-red-600');
+            
+            if (teamANameEl && data.teamAName) {
+                teamANameEl.innerHTML = `${data.teamAName}: <span class="score">${currentScores.teamA}</span>`;
+            }
+            
+            if (teamBNameEl && data.teamBName) {
+                teamBNameEl.innerHTML = `${data.teamBName}: <span class="score">${currentScores.teamB}</span>`;
+            }
+            
+            // Atualizar os campos de entrada no formulário de configurações
+            const teamANameInput = document.getElementById('teamA-name');
+            const teamBNameInput = document.getElementById('teamB-name');
+            
+            if (teamANameInput && data.teamAName) {
+                teamANameInput.value = data.teamAName;
+            }
+            
+            if (teamBNameInput && data.teamBName) {
+                teamBNameInput.value = data.teamBName;
+            }
         });
         
         socket.on('questionActivated', (data) => {
@@ -792,6 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function exportQuestionsJson() {
         if (questions.length === 0) {
             showToast('Nenhum Dado', 'Não há questões para exportar', 'warning');
+            showToast('Nenhum Dado', 'Não há questões para exportar', 'warning');
             return;
         }
         
@@ -853,8 +873,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function clearAllData() {
         try {
-            const response = await fetch(`${API_URL}/admin/clear-all-data`, {
-                method: 'DELETE'
+            const response = await fetch(`${API_URL}/admin/reset-scores`, {
+                method: 'POST'
             });
             
             if (!response.ok) {
