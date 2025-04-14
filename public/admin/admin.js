@@ -24,25 +24,98 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateQuestionBtn = document.getElementById('update-question-btn');
     const uploadBulkBtn = document.getElementById('upload-bulk-btn');
     const refreshPreviewBtn = document.getElementById('refresh-preview-btn');
-    const teamAScoreEl = document.querySelector('#current-scores .team-a .score');
-    const teamBScoreEl = document.querySelector('#current-scores .team-b .score');
-    
-    // Modais
-    const addQuestionModal = new bootstrap.Modal(document.getElementById('addQuestionModal'));
-    const editQuestionModal = new bootstrap.Modal(document.getElementById('editQuestionModal'));
-    const bulkUploadModal = new bootstrap.Modal(document.getElementById('bulkUploadModal'));
-    const confirmationModal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+    const teamAScoreEl = document.querySelector('#current-scores .score:first-child');
+    const teamBScoreEl = document.querySelector('#current-scores .score:last-child');
     
     // Inicialização
     initApp();
+    initModalSystem();
     
     function initApp() {
         fetchQuestions();
         initEventListeners();
         initSocketListeners();
+        initMobileMenu();
+        initTabSystem();
         
         // Mostrar notificação de boas-vindas
         showToast('Sistema de Administração Iniciado', 'Bem-vindo ao painel administrativo do RADAR 17!', 'success');
+    }
+    
+    function initMobileMenu() {
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        
+        if (mobileMenuButton && mobileMenu) {
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
+    }
+    
+    function initModalSystem() {
+        // Open modal buttons
+        document.querySelectorAll('[data-modal-target]').forEach(button => {
+            button.addEventListener('click', () => {
+                const modalId = button.getAttribute('data-modal-target');
+                const modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.classList.remove('hidden');
+                }
+            });
+        });
+        
+        // Close modal buttons
+        document.querySelectorAll('[data-modal-close]').forEach(button => {
+            button.addEventListener('click', () => {
+                const modal = button.closest('.fixed');
+                if (modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        });
+        
+        // Close modal when clicking outside
+        document.querySelectorAll('.fixed[id$="Modal"]').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.add('hidden');
+                }
+            });
+        });
+    }
+    
+    function initTabSystem() {
+        const tabButtons = document.querySelectorAll('[data-tab-target]');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+        
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Remove active class from all buttons
+                tabButtons.forEach(btn => {
+                    btn.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+                    btn.classList.add('text-gray-500', 'hover:text-gray-600', 'hover:border-gray-300');
+                });
+                
+                // Add active class to clicked button
+                button.classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+                button.classList.remove('text-gray-500', 'hover:text-gray-600', 'hover:border-gray-300');
+                
+                // Hide all tab panes
+                tabPanes.forEach(pane => {
+                    pane.classList.add('hidden');
+                    pane.classList.remove('block');
+                });
+                
+                // Show the target tab pane
+                const targetId = button.getAttribute('data-tab-target');
+                const targetPane = document.getElementById(targetId);
+                if (targetPane) {
+                    targetPane.classList.remove('hidden');
+                    targetPane.classList.add('block');
+                }
+            });
+        });
     }
     
     // Funções para carregar dados
@@ -57,12 +130,14 @@ document.addEventListener('DOMContentLoaded', () => {
             renderQuestionsPreview();
         } catch (error) {
             console.error('Erro ao carregar questões:', error);
-            questionsListEl.innerHTML = `
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle"></i> 
-                    Erro ao carregar questões. Verifique a conexão com o servidor.
-                </div>
-            `;
+            if (questionsListEl) {
+                questionsListEl.innerHTML = `
+                    <div class="bg-red-100 text-red-800 p-4 rounded">
+                        <i class="bi bi-exclamation-triangle mr-2"></i> 
+                        Erro ao carregar questões. Verifique a conexão com o servidor.
+                    </div>
+                `;
+            }
         }
     }
     
@@ -75,9 +150,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (questions.length === 0) {
             questionsListEl.innerHTML = `
                 <div class="text-center py-5">
-                    <i class="bi bi-question-circle" style="font-size: 3rem; color: #ccc;"></i>
-                    <h4 class="mt-3">Nenhuma questão cadastrada</h4>
-                    <p class="text-muted">Adicione questões para iniciar o debate</p>
+                    <i class="bi bi-question-circle text-gray-400 text-5xl"></i>
+                    <h4 class="mt-3 text-xl font-semibold">Nenhuma questão cadastrada</h4>
+                    <p class="text-gray-500">Adicione questões para iniciar o debate</p>
                 </div>
             `;
             return;
@@ -90,43 +165,43 @@ document.addEventListener('DOMContentLoaded', () => {
             const isActive = activeQuestion && activeQuestion._id === question._id;
             
             const questionEl = document.createElement('div');
-            questionEl.className = `question-item ${isActive ? 'active-question' : ''} ${question.isFinalized ? 'finalized-question' : ''}`;
+            questionEl.className = `mb-3 p-3 rounded ${isActive ? 'bg-blue-50 border-l-4 border-blue-500' : question.isFinalized ? 'bg-red-50 border-l-4 border-red-500' : 'bg-gray-100'} ${question.isFinalized ? 'opacity-90' : ''} shadow-sm`;
             
             let statusBadge = '';
             if (isActive && isVotingActive) {
-                statusBadge = '<span class="badge bg-success status-badge ms-2">Votação Ativa</span>';
+                statusBadge = '<span class="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Votação Ativa</span>';
             } else if (isActive) {
-                statusBadge = '<span class="badge bg-primary status-badge ms-2">Selecionada</span>';
+                statusBadge = '<span class="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">Selecionada</span>';
             } else if (question.isFinalized) {
-                statusBadge = '<span class="badge bg-secondary status-badge ms-2">Finalizada</span>';
+                statusBadge = '<span class="ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Finalizada</span>';
             }
             
             questionEl.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
+                <div class="flex justify-between items-center">
                     <div>
-                        <span class="question-number">${question.order}</span>
-                        <span class="question-text">${question.text}</span>
+                        <span class="inline-block w-8 h-8 text-center leading-8 ${question.isFinalized ? 'bg-red-200' : 'bg-gray-200'} rounded-full mr-2">${question.order}</span>
+                        <span class="font-medium">${question.text}</span>
                         ${statusBadge}
                     </div>
-                    <div class="btn-group">
+                    <div class="flex items-center">
                         ${question.isFinalized ? 
-                            `<span class="badge bg-info me-2">
-                                <i class="bi bi-trophy"></i> A: ${question.teamAVotes || 0} | B: ${question.teamBVotes || 0}
+                            `<span class="mr-3 px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">
+                                <i class="bi bi-trophy mr-1"></i> A: ${question.teamAVotes || 0} | B: ${question.teamBVotes || 0}
                             </span>` : 
                             ''
                         }
-                        <div class="btn-group btn-group-sm">
+                        <div class="flex space-x-1">
                             ${!question.isFinalized ? 
-                                `<button class="btn btn-sm btn-outline-primary activate-btn" data-id="${question._id}">
+                                `<button class="p-3 text-blue-600 hover:bg-blue-50 rounded activate-btn" data-id="${question._id}">
                                     <i class="bi bi-check-circle"></i>
                                 </button>
-                                <button class="btn btn-sm btn-outline-warning edit-btn" data-id="${question._id}">
+                                <button class="p-3 text-yellow-600 hover:bg-gray-50 rounded edit-btn" data-id="${question._id}">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${question._id}">
+                                <button class="p-3 text-red-600 hover:bg-red-50 rounded delete-btn" data-id="${question._id}">
                                     <i class="bi bi-trash"></i>
                                 </button>` : 
-                                `<button class="btn btn-sm btn-outline-secondary" disabled>
+                                `<button class="p-3 text-gray-400 rounded cursor-not-allowed" disabled>
                                     <i class="bi bi-lock"></i>
                                 </button>`
                             }
@@ -162,8 +237,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (questions.length === 0) {
             questionsPreviewEl.innerHTML = `
-                <div class="col-12 text-center py-4">
-                    <p class="text-muted">Nenhuma questão disponível</p>
+                <div class="col-span-4 text-center py-4">
+                    <p class="text-gray-500">Nenhuma questão disponível</p>
                 </div>
             `;
             return;
@@ -177,8 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (availableQuestions.length === 0) {
             questionsPreviewEl.innerHTML = `
-                <div class="col-12 text-center py-4">
-                    <p class="text-muted">Todas as questões já foram respondidas</p>
+                <div class="col-span-4 text-center py-4">
+                    <p class="text-gray-500">Todas as questões já foram respondidas</p>
                 </div>
             `;
             return;
@@ -188,21 +263,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const isActive = activeQuestion && activeQuestion._id === question._id;
             
             const colEl = document.createElement('div');
-            colEl.className = 'col-md-6 col-lg-3 mb-3';
+            colEl.className = 'mb-3';
             colEl.innerHTML = `
-                <div class="card h-100 ${isActive ? 'border-primary' : ''}">
-                    <div class="card-header ${isActive ? 'bg-primary text-white' : ''}">
-                        <span class="badge bg-secondary">#${question.order}</span>
-                        ${isActive ? '<span class="badge bg-warning text-dark float-end">Ativa</span>' : ''}
+                <div class="h-full rounded-lg shadow-md ${isActive ? 'border-2 border-blue-500' : 'border border-gray-200'}">
+                    <div class="px-3 py-2 border-b ${isActive ? 'bg-blue-500 text-white' : 'bg-gray-50'}">
+                        <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded bg-gray-200 text-gray-800">#${question.order}</span>
+                        ${isActive ? '<span class="float-right px-2 py-0.5 text-xs font-semibold rounded bg-yellow-300 text-gray-800">Ativa</span>' : ''}
                     </div>
-                    <div class="card-body">
-                        <p class="card-text">${question.text}</p>
-                    </div>
-                    <div class="card-footer text-center">
-                        <button class="btn btn-sm ${isActive ? 'btn-secondary' : 'btn-primary'} quick-activate-btn" 
-                            data-id="${question._id}" ${isActive ? 'disabled' : ''}>
-                            ${isActive ? 'Selecionada' : 'Selecionar'}
-                        </button>
+                    <div class="p-3">
+                        <p class="text-sm mb-3">${question.text}</p>
+                        <div class="text-center">
+                            <button class="w-full py-1.5 px-3 text-sm rounded ${isActive ? 'bg-gray-300 text-gray-700' : 'bg-blue-600 hover:bg-blue-700 text-white'} quick-activate-btn" 
+                                data-id="${question._id}" ${isActive ? 'disabled' : ''}>
+                                ${isActive ? 'Selecionada' : 'Selecionar'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -231,31 +306,31 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (activeQuestion) {
             activeQuestionTextEl.textContent = activeQuestion.text;
-            activeQuestionTextEl.classList.remove('alert-secondary');
+            activeQuestionTextEl.classList.remove('bg-gray-200');
             
             if (isVotingActive) {
-                activeQuestionTextEl.classList.add('alert-success');
-                activeQuestionTextEl.classList.remove('alert-warning');
+                activeQuestionTextEl.classList.add('bg-green-100', 'text-green-800');
+                activeQuestionTextEl.classList.remove('bg-yellow-100', 'text-yellow-800');
                 startVotingBtn.disabled = true;
                 endVotingBtn.disabled = false;
-                votingStatusEl.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> Votação em andamento. Os participantes podem votar agora.';
-                votingStatusEl.className = 'alert alert-success';
+                votingStatusEl.innerHTML = '<i class="bi bi-check-circle-fill mr-1 text-green-500"></i> Votação em andamento. Os participantes podem votar agora.';
+                votingStatusEl.className = 'bg-green-100 text-green-800 p-3 rounded';
             } else {
-                activeQuestionTextEl.classList.add('alert-warning');
-                activeQuestionTextEl.classList.remove('alert-success');
+                activeQuestionTextEl.classList.add('bg-yellow-100', 'text-yellow-800');
+                activeQuestionTextEl.classList.remove('bg-green-100', 'text-green-800');
                 startVotingBtn.disabled = false;
                 endVotingBtn.disabled = true;
-                votingStatusEl.innerHTML = '<i class="bi bi-info-circle"></i> Questão selecionada. Clique em "Iniciar Votação" quando estiver pronto.';
-                votingStatusEl.className = 'alert alert-warning';
+                votingStatusEl.innerHTML = '<i class="bi bi-info-circle mr-1"></i> Questão selecionada. Clique em "Iniciar Votação" quando estiver pronto.';
+                votingStatusEl.className = 'bg-yellow-100 text-yellow-800 p-3 rounded';
             }
         } else {
             activeQuestionTextEl.textContent = 'Nenhuma questão ativa';
-            activeQuestionTextEl.classList.add('alert-secondary');
-            activeQuestionTextEl.classList.remove('alert-success', 'alert-warning');
+            activeQuestionTextEl.classList.add('bg-gray-200');
+            activeQuestionTextEl.classList.remove('bg-green-100', 'text-green-800', 'bg-yellow-100', 'text-yellow-800');
             startVotingBtn.disabled = true;
             endVotingBtn.disabled = true;
-            votingStatusEl.innerHTML = '<i class="bi bi-info-circle"></i> Selecione uma questão para ativar.';
-            votingStatusEl.className = 'alert alert-info';
+            votingStatusEl.innerHTML = '<i class="bi bi-info-circle mr-1"></i> Selecione uma questão para ativar.';
+            votingStatusEl.className = 'bg-blue-100 text-blue-800 p-3 rounded';
         }
     }
     
@@ -330,13 +405,22 @@ document.addEventListener('DOMContentLoaded', () => {
             ));
         }
         
-        // Event listener para formulário de configurações
-        const debateSettingsForm = document.getElementById('debate-settings-form');
-        if (debateSettingsForm) {
-            debateSettingsForm.addEventListener('submit', function(e) {
+        // Settings form submit
+        const settingsForm = document.querySelector('#settings-tab-pane form');
+        if (settingsForm) {
+            settingsForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 saveSettings();
             });
+            
+            // Also add click listener to the submit button as a fallback
+            const saveSettingsBtn = settingsForm.querySelector('button[type="submit"]');
+            if (saveSettingsBtn) {
+                saveSettingsBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    saveSettings();
+                });
+            }
         }
     }
     
@@ -442,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
             orderEl.value = '';
             
             // Fechar modal
-            addQuestionModal.hide();
+            document.getElementById('addQuestionModal').classList.add('hidden');
             
             // Recarregar questões
             fetchQuestions();
@@ -461,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('edit-question-text').value = question.text;
         document.getElementById('edit-question-order').value = question.order;
         
-        editQuestionModal.show();
+        document.getElementById('editQuestionModal').classList.remove('hidden');
     }
     
     async function updateQuestion() {
@@ -499,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const updatedQuestion = await response.json();
             
             // Fechar modal
-            editQuestionModal.hide();
+            document.getElementById('editQuestionModal').classList.add('hidden');
             
             // Recarregar questões
             fetchQuestions();
@@ -642,53 +726,61 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function bulkUploadQuestions() {
-        const textareaEl = document.getElementById('bulk-questions');
-        const questionTexts = textareaEl.value.trim().split('\n').filter(text => text.trim() !== '');
+        // Get the textarea instead of file input
+        const bulkQuestionsTextarea = document.getElementById('bulk-questions');
         
-        if (questionTexts.length === 0) {
-            showInputError(textareaEl, 'Por favor, insira pelo menos uma questão');
+        if (!bulkQuestionsTextarea || !bulkQuestionsTextarea.value.trim()) {
+            showToast('Erro', 'Por favor, insira pelo menos uma questão', 'error');
+            return;
+        }
+        
+        // Parse questions from textarea (one per line)
+        const questionsText = bulkQuestionsTextarea.value.trim();
+        const questionLines = questionsText.split('\n').filter(line => line.trim().length > 0);
+        
+        if (questionLines.length === 0) {
+            showToast('Erro', 'Por favor, insira pelo menos uma questão válida', 'error');
             return;
         }
         
         try {
-            // Determinar a ordem inicial para as novas questões
-            let startOrder = 1;
+            // Get the highest current order
+            let highestOrder = 0;
             if (questions.length > 0) {
-                // Encontrar o maior número de ordem atual
-                startOrder = Math.max(...questions.map(q => q.order)) + 1;
+                highestOrder = Math.max(...questions.map(q => q.order || 0));
             }
             
-            const questionsToAdd = questionTexts.map((text, index) => ({
+            // Create question objects
+            const newQuestions = questionLines.map((text, index) => ({
                 text: text.trim(),
-                order: startOrder + index
+                order: highestOrder + index + 1
             }));
             
+            // Send to server - using the correct endpoint from your routes/questions.js file
             const response = await fetch(`${API_URL}/questions/bulk`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    questions: questionsToAdd
-                })
+                body: JSON.stringify({ questions: newQuestions })
             });
             
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Erro ao carregar questões em massa');
+                throw new Error(errorData.error || 'Erro ao fazer upload em massa');
             }
             
-            // Limpar campo
-            textareaEl.value = '';
-            
             // Fechar modal
-            bulkUploadModal.hide();
+            document.getElementById('bulkUploadModal').classList.add('hidden');
+            
+            // Limpar campo de texto
+            bulkQuestionsTextarea.value = '';
             
             // Recarregar questões
             fetchQuestions();
             
             // Notificar usuário
-            showToast('Questões Adicionadas', `${questionsToAdd.length} questões foram adicionadas com sucesso`, 'success');
+            showToast('Upload Concluído', `${newQuestions.length} questões foram adicionadas com sucesso`, 'success');
             
         } catch (error) {
             console.error('Erro ao adicionar questões em massa:', error);
@@ -712,20 +804,17 @@ document.addEventListener('DOMContentLoaded', () => {
             teamBVotes: q.teamBVotes || 0
         }));
         
-        // Criar blob e link de download
-        const dataStr = JSON.stringify(exportData, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
+        // Criar e baixar arquivo JSON
+        const jsonData = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
         
-        // Criar link e simular clique
-        const downloadLink = document.createElement('a');
-        downloadLink.href = url;
-        downloadLink.download = `radar17-questions-${formatDate(new Date())}.json`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'questions.json';
+        a.click();
         
-        showToast('Exportação Concluída', 'As questões foram exportadas com sucesso', 'success');
+        URL.revokeObjectURL(url);
     }
     
     function exportResultsCsv() {
@@ -734,65 +823,53 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Filtrar apenas questões finalizadas
-        const finalizedQuestions = questions.filter(q => q.isFinalized);
+        // Filtrar questões finalizadas e ordenar
+        const finalizedQuestions = questions
+            .filter(q => q.isFinalized)
+            .sort((a, b) => a.order - b.order);
         
         if (finalizedQuestions.length === 0) {
-            showToast('Nenhum Resultado', 'Não há questões finalizadas para exportar', 'warning');
+            showToast('Nenhum Dado', 'Não há questões finalizadas para exportar', 'warning');
             return;
         }
         
-        // Criar cabeçalho CSV
-        let csvContent = 'Ordem,Questão,Votos Equipa A,Votos Equipa B,Total Votos\n';
-        
-        // Adicionar linhas de dados
+        // Criar dados CSV
+        let csvData = 'Número,Questão,Equipa A,Equipa B\n';
         finalizedQuestions.forEach(q => {
-            const teamAVotes = q.teamAVotes || 0;
-            const teamBVotes = q.teamBVotes || 0;
-            const totalVotes = teamAVotes + teamBVotes;
-            csvContent += `${q.order},"${q.text.replace(/"/g, '""')}",${teamAVotes},${teamBVotes},${totalVotes}\n`;
+            csvData += `${q.order},"${q.text}",${q.teamAVotes || 0},${q.teamBVotes || 0}\n`;
         });
         
-        // Adicionar linha de totais
-        const totalTeamA = finalizedQuestions.reduce((sum, q) => sum + (q.teamAVotes || 0), 0);
-        const totalTeamB = finalizedQuestions.reduce((sum, q) => sum + (q.teamBVotes || 0), 0);
-        const grandTotal = totalTeamA + totalTeamB;
-        csvContent += `TOTAL,"",${totalTeamA},${totalTeamB},${grandTotal}\n`;
+        // Criar e baixar arquivo CSV
+        const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
         
-        // Criar blob e link de download
-        const dataBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(dataBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'results.csv';
+        a.click();
         
-        // Criar link e simular clique
-        const downloadLink = document.createElement('a');
-        downloadLink.href = url;
-        downloadLink.download = `radar17-results-${formatDate(new Date())}.csv`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        
-        showToast('Exportação Concluída', 'Os resultados foram exportados com sucesso', 'success');
+        URL.revokeObjectURL(url);
     }
     
     async function clearAllData() {
         try {
-            const response = await fetch(`${API_URL}/admin/clear-data`, {
-                method: 'POST'
+            const response = await fetch(`${API_URL}/admin/clear-all-data`, {
+                method: 'DELETE'
             });
             
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Erro ao limpar dados');
+                throw new Error(errorData.error || 'Erro ao limpar todos os dados');
             }
             
-            // Recarregar dados
+            // Recarregar questões
             fetchQuestions();
             
             // Notificar usuário
             showToast('Dados Limpos', 'Todos os dados foram limpos com sucesso', 'success');
             
         } catch (error) {
-            console.error('Erro ao limpar dados:', error);
+            console.error('Erro ao limpar todos os dados:', error);
             showToast('Erro', error.message, 'error');
         }
     }
@@ -805,203 +882,244 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Erro ao resetar base de dados');
+                throw new Error(errorData.error || 'Erro ao resetar a base de dados');
             }
             
-            // Recarregar a página
-            showToast('Base de Dados Resetada', 'A página será recarregada em 3 segundos...', 'success');
+            // Recarregar questões
+            fetchQuestions();
             
-            setTimeout(() => {
-                window.location.reload();
-            }, 3000);
+            // Notificar usuário
+            showToast('Base de Dados Resetada', 'A base de dados foi resetada com sucesso', 'success');
             
         } catch (error) {
-            console.error('Erro ao resetar base de dados:', error);
+            console.error('Erro ao resetar a base de dados:', error);
             showToast('Erro', error.message, 'error');
         }
     }
-    function saveSettings() {
-        const teamAName = document.getElementById('teamA-name').value;
-        const teamBName = document.getElementById('teamB-name').value;
-        const debateTitle = document.getElementById('debate-title').value;
-        const debateSubtitle = document.getElementById('debate-subtitle').value;
+    
+    async function saveSettings() {
+        // Get form elements, with null checks
+        const teamANameEl = document.getElementById('teamA-name');
+        const teamBNameEl = document.getElementById('teamB-name');
+        const debateTitleEl = document.getElementById('debate-title');
+        const debateSubtitleEl = document.getElementById('debate-subtitle');
         
-        // Salvar no localStorage
+        // Get values with fallbacks
+        const teamAName = teamANameEl ? teamANameEl.value : "Equipa A";
+        const teamBName = teamBNameEl ? teamBNameEl.value : "Equipa B";
+        const debateTitle = debateTitleEl ? debateTitleEl.value : "RADAR 17 - Debate Participativo";
+        const debateSubtitle = debateSubtitleEl ? debateSubtitleEl.value : "Jovens e Decisores Políticos";
+        
+        // Save settings locally first
         const settings = {
-          teamAName,
-          teamBName,
-          debateTitle,
-          debateSubtitle,
-          updatedAt: new Date().toISOString()
+            teamAName,
+            teamBName,
+            debateTitle,
+            debateSubtitle,
+            updatedAt: new Date().toISOString()
         };
         
         localStorage.setItem('radar17-settings', JSON.stringify(settings));
         
-        // Enviar diretamente via Socket.io (método mais confiável)
-        socket.emit('updateTeamNames', { 
-          teamAName: teamAName || "Equipa A", 
-          teamBName: teamBName || "Equipa B" 
-        });
-        
-        showToast('Configurações Guardadas', 'As configurações foram guardadas com sucesso', 'success');
-        
-        return false; // Impedir envio do formulário
+        try {
+            // Try to save team names on the server using the correct endpoint
+            const response = await fetch(`${API_URL}/admin/update-team-names`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    teamAName,
+                    teamBName
+                })
+            });
+            
+            if (!response.ok) {
+                // If server returns an error, we'll still use the local settings
+                console.warn('Server returned error when saving settings. Using local storage only.');
+            }
+            
+            // Emit socket event to update settings for all clients
+            if (socket && socket.connected) {
+                socket.emit('updateSettings', settings);
+            }
+            
+            showToast('Configurações Salvas', 'As configurações foram salvas com sucesso', 'success');
+            
+        } catch (error) {
+            console.error('Erro ao salvar configurações:', error);
+            
+            // Even if there's an error with the server, we've saved locally
+            if (socket && socket.connected) {
+                socket.emit('updateSettings', settings);
+                showToast('Configurações Salvas Localmente', 'Não foi possível salvar no servidor, mas as configurações foram enviadas via socket', 'warning');
+            } else {
+                showToast('Configurações Salvas Localmente', 'Não foi possível salvar no servidor ou enviar via socket', 'warning');
+            }
+        }
     }
-
-    function saveSettings() {
-        console.log('Salvando configurações...');
-        
-        const teamAName = document.getElementById('teamA-name').value || "Equipa A";
-        const teamBName = document.getElementById('teamB-name').value || "Equipa B";
-        const debateTitle = document.getElementById('debate-title').value;
-        const debateSubtitle = document.getElementById('debate-subtitle').value;
-        
-        console.log(`Nomes: ${teamAName} vs ${teamBName}`);
-        
-        // Salvar no localStorage (para persistência local)
-        const settings = {
-          teamAName,
-          teamBName,
-          debateTitle,
-          debateSubtitle,
-          updatedAt: new Date().toISOString()
-        };
-        
-        localStorage.setItem('radar17-settings', JSON.stringify(settings));
-        
-        // Enviar via Socket.io (para sincronização em tempo real)
-        if (socket && socket.connected) {
-          console.log('Socket conectado, enviando atualização...');
-          socket.emit('updateTeamNames', { 
-            teamAName, 
-            teamBName 
-          });
-          showToast('Configurações Salvas', 'As configurações foram salvas e sincronizadas', 'success');
-        } else {
-          console.warn('Socket não conectado!');
-          showToast('Aviso', 'Socket não conectado. Configurações salvas localmente, mas podem não estar sincronizadas.', 'warning');
-        }
-      }
-      
-      // Certifique-se de ter o listener para receber atualizações também
-      socket.on('teamNamesUpdated', (data) => {
-        console.log('Admin recebeu atualização de nomes:', data);
-        
-        // Atualizar formulário se necessário
-        const teamANameInput = document.getElementById('teamA-name');
-        const teamBNameInput = document.getElementById('teamB-name');
-        
-        if (teamANameInput && data.teamAName && !teamANameInput.matches(':focus')) {
-          teamANameInput.value = data.teamAName;
-        }
-        
-        if (teamBNameInput && data.teamBName && !teamBNameInput.matches(':focus')) {
-          teamBNameInput.value = data.teamBName;
-        }
-      });
-
-    // Funções utilitárias
+    
     function showToast(title, message, type = 'info') {
         // Verificar se já existe um container de toasts
         let toastContainer = document.querySelector('.toast-container');
         
         if (!toastContainer) {
             toastContainer = document.createElement('div');
-            toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            toastContainer.className = 'fixed bottom-4 right-4 z-50 space-y-2 toast-container';
             document.body.appendChild(toastContainer);
         }
         
         // Criar um novo toast
         const toastId = 'toast-' + Date.now();
         const toast = document.createElement('div');
-        toast.className = `toast border-${type}`;
-        toast.setAttribute('role', 'alert');
-        toast.setAttribute('aria-live', 'assertive');
-        toast.setAttribute('aria-atomic', 'true');
+        
+        // Definir classes com base no tipo
+        let bgColor, textColor, borderColor, iconClass;
+        switch(type) {
+            case 'success':
+                bgColor = 'bg-green-100';
+                textColor = 'text-green-800';
+                borderColor = 'border-green-500';
+                iconClass = 'bi-check-circle';
+                break;
+            case 'error':
+                bgColor = 'bg-red-100';
+                textColor = 'text-red-800';
+                borderColor = 'border-red-500';
+                iconClass = 'bi-exclamation-circle';
+                break;
+            case 'warning':
+                bgColor = 'bg-yellow-100';
+                textColor = 'text-yellow-800';
+                borderColor = 'border-yellow-500';
+                iconClass = 'bi-exclamation-triangle';
+                break;
+            default: // info
+                bgColor = 'bg-blue-100';
+                textColor = 'text-blue-800';
+                borderColor = 'border-blue-500';
+                iconClass = 'bi-info-circle';
+        }
+        
+        toast.className = `${bgColor} ${textColor} border-l-4 ${borderColor} p-4 rounded shadow-md max-w-md transform transition-all duration-300 ease-in-out`;
         toast.setAttribute('id', toastId);
         
         toast.innerHTML = `
-            <div class="toast-header">
-                <div class="rounded me-2 bg-${type}" style="width: 20px; height: 20px;"></div>
-                <strong class="me-auto">${title}</strong>
-                <small>${formatTime(new Date())}</small>
-                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-            <div class="toast-body">
-                ${message}
+            <div class="flex justify-between items-start">
+                <div class="flex">
+                    <i class="bi ${iconClass} mr-2 text-lg"></i>
+                    <div>
+                        <h3 class="font-bold">${title}</h3>
+                        <p class="text-sm">${message}</p>
+                    </div>
+                </div>
+                <button class="text-gray-500 hover:text-gray-700 ml-4" onclick="this.parentElement.parentElement.remove()">
+                    <i class="bi bi-x"></i>
+                </button>
             </div>
         `;
         
         toastContainer.appendChild(toast);
         
-        // Inicializar e mostrar o toast
-        const bsToast = new bootstrap.Toast(toast, {
-            autohide: true,
-            delay: 5000
-        });
-        
-        bsToast.show();
-        
-        // Remover o toast do DOM quando for fechado
-        toast.addEventListener('hidden.bs.toast', function () {
-            toast.remove();
-        });
-    }
-    
-    function showInputError(inputElement, message) {
-        // Destacar o input
-        inputElement.classList.add('is-invalid');
-        
-        // Verificar se já existe uma mensagem de erro
-        let errorDiv = inputElement.nextElementSibling;
-        if (!errorDiv || !errorDiv.classList.contains('invalid-feedback')) {
-            errorDiv = document.createElement('div');
-            errorDiv.className = 'invalid-feedback';
-            inputElement.after(errorDiv);
-        }
-        
-        // Atualizar mensagem
-        errorDiv.textContent = message;
-        
-        // Remover destaque após 3 segundos
+        // Auto-remove after 5 seconds
         setTimeout(() => {
-            inputElement.classList.remove('is-invalid');
-        }, 3000);
+            toast.classList.add('opacity-0');
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }, 5000);
     }
     
-    function confirmAction(message, callback, type = 'warning') {
-        // Atualizar mensagem de confirmação
-        const confirmationMessage = document.getElementById('confirmation-message');
-        if (confirmationMessage) {
-            confirmationMessage.textContent = message;
+    function showInputError(inputEl, message) {
+        // Implementação do erro de entrada aqui
+    }
+    
+    function confirmAction(message, action, type = 'info') {
+        // Create a modal for confirmation
+        const modalId = 'confirm-action-modal';
+        let modal = document.getElementById(modalId);
+        
+        // If modal doesn't exist, create it
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
+            document.body.appendChild(modal);
         }
         
-        // Configurar botão de confirmação
-        const confirmBtn = document.getElementById('confirm-action-btn');
-        if (confirmBtn) {
-            // Remover event listeners antigos
-            const newConfirmBtn = confirmBtn.cloneNode(true);
-            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-            
-            // Adicionar novo event listener
-            newConfirmBtn.addEventListener('click', () => {
-                confirmationModal.hide();
-                callback();
-            });
-            
-            // Atualizar estilo do botão
-            newConfirmBtn.className = `btn btn-${type}`;
+        // Set icon and color based on type
+        let iconClass, headerClass, buttonClass;
+        switch(type) {
+            case 'danger':
+                iconClass = 'bi-exclamation-triangle-fill text-red-600';
+                headerClass = 'text-red-600';
+                buttonClass = 'bg-red-600 hover:bg-red-700';
+                break;
+            case 'warning':
+                iconClass = 'bi-exclamation-triangle text-yellow-600';
+                headerClass = 'text-yellow-600';
+                buttonClass = 'bg-yellow-600 hover:bg-yellow-700';
+                break;
+            default: // info
+                iconClass = 'bi-question-circle text-blue-600';
+                headerClass = 'text-blue-600';
+                buttonClass = 'bg-blue-600 hover:bg-blue-700';
         }
         
-        // Mostrar modal
-        confirmationModal.show();
+        // Set modal content
+        modal.innerHTML = `
+            <div class="relative w-full max-w-md mx-auto bg-white rounded-lg shadow-xl overflow-hidden">
+                <div class="px-6 py-4">
+                    <div class="flex items-center mb-3">
+                        <i class="bi ${iconClass} text-2xl mr-3 ml-3"></i>
+                        <h3 class="text-lg font-bold ${headerClass}">Confirmação</h3>
+                    </div>
+                    <p class="text-gray-700 mr-3 ml-3">${message}</p>
+                </div>
+                <div class="px-6 py-3 bg-gray-50 flex justify-end space-x-3">
+                    <button id="confirm-cancel-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors">
+                        Cancelar
+                    </button>
+                    <button id="confirm-action-btn" class="px-4 py-2 mr-3 ml-3 text-sm font-medium text-white ${buttonClass} rounded hover:opacity-90 transition-colors">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        const cancelBtn = modal.querySelector('#confirm-cancel-btn'); // Use querySelector scoped to modal
+    const confirmBtn = modal.querySelector('#confirm-action-btn'); // Use querySelector scoped to modal
+
+    // Add event listeners DIRECTLY to these buttons
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+    } else {
+        console.error("Confirm modal: Cancel button not found");
     }
-    
-    function formatDate(date) {
-        return date.toISOString().split('T')[0];
+
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            action(); // Execute the provided action function
+        });
+    } else {
+        console.error("Confirm modal: Confirm button not found");
     }
-    
-    function formatTime(date) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-});
+
+
+    // --- End Simplified Listener Attachment ---
+
+
+    // Listener to close when clicking outside the modal content
+    modal.addEventListener('click', (e) => {
+        // Check if the click target is the modal background itself, not its content
+        if (e.target === modal) {
+            modal.classList.add('hidden');
+        }
+    });
+
+    // Show the modal
+    modal.classList.remove('hidden');
+}})

@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY package*.json ./
 
+RUN npm run build:css
+
 RUN npm install
 
 COPY . .

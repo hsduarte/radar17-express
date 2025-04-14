@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles can go here */
+
+@layer components {
+    /* Visualizador de Debate - Layout */
+    .fullscreen {
+        @apply fixed top-0 left-0 w-screen h-screen bg-gray-900 text-white flex flex-col;
+    }
+    
+    .header {
+        @apply bg-gray-800 text-white p-5 text-center h-[15vh] flex flex-col justify-center;
+    }
+    
+    .content {
+        @apply flex-1 flex flex-col relative;
+    }
+    
+    /* Área da Questão */
+    .question-container {
+        @apply bg-green-600/90 p-5 rounded-lg m-5 text-center flex flex-col justify-center h-[30vh];
+    }
+    
+    .question-text {
+        @apply text-4xl font-bold mb-3;
+    }
+    
+    .voting-status {
+        @apply text-2xl mt-4;
+    }
+    
+    /* Área de Pontuações */
+    .scores-container {
+        @apply flex justify-around items-center h-[40vh] p-5;
+    }
+    
+    .team-score {
+        @apply text-center w-[45%] h-full flex flex-col justify-center rounded-2xl relative overflow-hidden;
+    }
+    
+    .team-a {
+        @apply bg-blue-600/20 border-5 border-blue-600;
+    }
+    
+    .team-b {
+        @apply bg-red-600/20 border-5 border-red-600;
+    }
+    
+    .team-name {
+        @apply text-4xl font-bold mb-5;
+    }
+    
+    .score {
+        @apply text-6xl font-bold;
+    }
+    
+    .team-a .team-name, .team-a .score {
+        @apply text-blue-600;
+    }
+    
+    .team-b .team-name, .team-b .score {
+        @apply text-red-600;
+    }
+    
+    .vs-container {
+        @apply absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white text-gray-800 w-24 h-24 flex justify-center items-center rounded-full text-4xl font-bold shadow-lg z-10;
+    }
+    
+    /* Área de Resultados */
+    .question-result {
+        @apply bg-white/10 rounded-lg p-4 mx-5 mr-48 flex justify-between;
+    }
+    
+    .result-bar {
+        @apply h-10 rounded-full relative overflow-hidden bg-white/20 mt-3;
+    }
+    
+    .team-a-bar {
+        @apply bg-blue-600 h-full transition-all duration-1000 ease-in-out;
+    }
+    
+    .team-b-bar {
+        @apply bg-red-600 h-full absolute top-0 right-0 transition-all duration-1000 ease-in-out;
+    }
+    
+    .result-value {
+        @apply absolute top-1/2 transform -translate-y-1/2 font-bold text-white;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+    }
+    
+    .team-a-value {
+        @apply left-4;
+    }
+    
+    .team-b-value {
+        @apply right-4;
+    }
+    
+    .vote-count {
+        @apply text-2xl mt-3 text-white/70 text-center;
+    }
+    
+    /* QR Code */
+    .qr-container {
+        @apply fixed bottom-5 right-5 bg-white p-3 rounded-lg flex flex-col items-center shadow-lg z-20 transition-opacity duration-300;
+    }
+    
+    .qr-code {
+        @apply w-36 h-36 bg-white p-2 mb-2;
+    }
+    
+    .qr-label {
+        @apply text-black text-sm font-bold text-center;
+    }
+    
+    .transparent-qr {
+        @apply opacity-70;
+    }
+    
+    /* Animações */
+    .pulse-animation {
+        @apply animate-pulse;
+    }
+    
+    .score-animation {
+        @apply transition-transform duration-1000;
+        animation: score-change 1s ease-out;
+    }
+    
+    @keyframes score-change {
+        0% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.2);
+        }
+        100% {
+            transform: scale(1);
+        }
+    }
+    
+    /* Página de Votação */
+    /* Animações para a página de votação */
+    .shake {
+        animation: shake 0.5s;
+    }
+    
+    @keyframes shake {
+        0% { transform: translateX(0); }
+        25% { transform: translateX(5px); }
+        50% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+        100% { transform: translateX(0); }
+    }
+    
+    /* Status message styling */
+    .status-success {
+        @apply bg-green-100 text-green-700 p-4 rounded-lg;
+    }
+    
+    .status-warning {
+        @apply bg-yellow-100 text-yellow-700 p-4 rounded-lg;
+    }
+    
+    .status-danger {
+        @apply bg-red-100 text-red-700 p-4 rounded-lg;
+    }
+    
+    .status-info {
+        @apply bg-blue-100 text-blue-700 p-4 rounded-lg;
+    }
+    
+    /* Button active state animation */
+    .btn-active {
+        @apply transform scale-95;
+    }
+    
+    /* Utilitários adicionais */
+    .border-5 {
+        border-width: 5px;
+    }
+}

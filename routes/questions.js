@@ -128,4 +128,30 @@ router.post('/bulk', async (req, res) => {
   }
 });
 
+// Add this route to your questions.js file
+router.put('/questions/:id/archive', async (req, res) => {
+    try {
+        const questionId = req.params.id;
+        
+        // Find the question
+        const question = await Question.findById(questionId);
+        
+        if (!question) {
+            return res.status(404).json({ error: 'Questão não encontrada' });
+        }
+        
+        // Set archived flag to true
+        question.isArchived = true;
+        await question.save();
+        
+        // Emit event to all clients
+        req.app.get('io').emit('questionArchived', { questionId });
+        
+        res.json({ success: true, message: 'Questão arquivada com sucesso' });
+    } catch (error) {
+        console.error('Error archiving question:', error);
+        res.status(500).json({ error: 'Erro ao arquivar questão' });
+    }
+});
+
 module.exports = router;
